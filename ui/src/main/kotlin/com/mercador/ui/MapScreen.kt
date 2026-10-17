@@ -8,7 +8,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -26,7 +28,7 @@ import com.mercador.core.universe.StarSystem
 
 /** Mapa da galáxia: a mesa de inteligência (maquete 1). */
 @Composable
-fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit = {}, onTab: (Tab) -> Unit = {}) {
+fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit = {}, onTab: (Tab) -> Unit = {}, onTravel: () -> Unit = {}, notice: String? = null) {
     val region = game.world.region
     val factions = game.factions.factions
     Column(Modifier.fillMaxSize().background(Noir.bg)) {
@@ -44,14 +46,14 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
         Box(Modifier.fillMaxWidth().height(1.dp).background(Noir.line))
         val measurer = rememberTextMeasurer()
         Box(Modifier.fillMaxWidth().weight(1f)) {
-            Canvas(Modifier.fillMaxSize().clipToBounds()) {
-                val pad = 36f * density
-                val xs = region.systems.map { it.x }; val ys = region.systems.map { it.y }
-                val minX = xs.min().toFloat(); val maxX = xs.max().toFloat(); val minY = ys.min().toFloat(); val maxY = ys.max().toFloat()
-                fun pos(s: StarSystem) = Offset(
-                    pad + (s.x - minX) / (maxX - minX).coerceAtLeast(1f) * (size.width - 2 * pad),
-                    pad + 36f * density + (s.y - minY) / (maxY - minY).coerceAtLeast(1f) * (size.height - 2 * pad - 36f * density),
-                )
+            Canvas(Modifier.fillMaxSize().clipToBounds().pointerInput(region) {
+                detectTapGestures { tap ->
+                    val layout = mapLayout(region.systems, size.width.toFloat(), size.height.toFloat(), density)
+                    layout.minByOrNull { (_, p) -> (p - tap).getDistance() }?.takeIf { (_, p) -> (p - tap).getDistance() < 28f * density }?.let { onSelect(it.key) }
+                }
+            }) {
+                val layout = mapLayout(region.systems, size.width, size.height, density)
+                fun pos(s: StarSystem) = layout.getValue(s)
                 // grade
                 val step = 60f * density
                 var gx = 0f; while (gx < size.width) { drawLine(Noir.line.copy(alpha = .35f), Offset(gx, 0f), Offset(gx, size.height)); gx += step }
@@ -106,13 +108,13 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
                 }
             }
         }
-        SystemCard(game, selected)
+        SystemCard(game, selected, onTravel, notice)
         BottomNav(Tab.MAPA, onSelect = onTab)
     }
 }
 
 @Composable
-private fun SystemCard(game: Game, s: StarSystem) {
+private fun SystemCard(game: Game, s: StarSystem, onTravel: () -> Unit, notice: String?) {
     val m = game.world.meters(s)
     val color = Noir.faction(s.faction)
     val cost = if (s === game.location) 0 else game.fuelCost(s)
@@ -143,7 +145,23 @@ private fun SystemCard(game: Game, s: StarSystem) {
                 }
             }
             Spacer(Modifier.height(10.dp))
-            PrimaryButton("Planejar salto", Modifier.fillMaxWidth())
+            if (notice != null) { T(notice, 11.5f, Noir.salmon, italic = true, modifier = Modifier.padding(bottom = 6.dp)) }
+            val can = s !== game.location && cost <= game.fuel
+            if (can) PrimaryButton("Saltar para ${s.name}", Modifier.fillMaxWidth(), onTravel)
+            else OutlineButton(if (s === game.location) "Você está aqui" else "Combustível insuficiente", Modifier.fillMaxWidth(), Noir.muted, onTravel)
         }
+    }
+}
+
+/** Posição de cada sistema no canvas; o mesmo cálculo desenha o mapa e resolve o toque. */
+internal fun mapLayout(systems: List<StarSystem>, w: Float, h: Float, density: Float): Map<StarSystem, Offset> {
+    val pad = 36f * density
+    val minX = systems.minOf { it.x }.toFloat(); val maxX = systems.maxOf { it.x }.toFloat()
+    val minY = systems.minOf { it.y }.toFloat(); val maxY = systems.maxOf { it.y }.toFloat()
+    return systems.associateWith { s ->
+        Offset(
+            pad + (s.x - minX) / (maxX - minX).coerceAtLeast(1f) * (w - 2 * pad),
+            pad + 36f * density + (s.y - minY) / (maxY - minY).coerceAtLeast(1f) * (h - 2 * pad - 36f * density),
+        )
     }
 }

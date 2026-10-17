@@ -51,6 +51,24 @@ object Preview {
         return null
     }
 
+    /** Joga de verdade até uma storylet aparecer (histórias ligadas); null se nenhuma semente der. */
+    private fun storied(): Game? {
+        for (seed in 1L..60L) {
+            val world = World(Region.around(Universe(seed)))
+            val g = Game(world, world.region.systems[0], credits = 4_200)
+            repeat(80) {
+                g.refuel()
+                val d = g.reachable().firstOrNull() ?: return@repeat
+                when (g.travel(d)) {
+                    is Outcome.Story -> return g
+                    is Outcome.Ok -> {}
+                    else -> return@repeat
+                }
+            }
+        }
+        return null
+    }
+
     /** As quatro telas das maquetes (docs/mercador) sobre um jogo real, uma linha do tempo só. */
     fun renderAll(outDir: File): List<File> {
         outDir.mkdirs()
@@ -63,6 +81,10 @@ object Preview {
         val dest = g.reachable().firstOrNull() ?: g.world.region.systems.first { it !== here }
         save("01-mapa.png") { MapScreen(g, dest) }
         save("02-estacao.png") { StationScreen(g) }
+
+        // 5: a perseguição, tal como o jogador a vê pela raiz do app
+        val ctl = GameController(g)
+        save("05-perseguicao.png") { AppRoot(ctl) }
 
         // 3: confronto, com segredo, favor e uma rodada já jogada
         val s = (g.respond(Response.CONFRONTAR) as Outcome.Confronting).scene
@@ -79,6 +101,22 @@ object Preview {
         g.grantTrait(Trait.DEVEDOR)
         g.grantTrait(Trait.FRIO, 25)
         save("04-livro.png") { LedgerScreen(g, InnerVoice.line(g)) }
+
+        // 6 a 9: história, desfecho, dossiê e bar, pela raiz do app (navegação e estado reais)
+        val sg = storied() ?: error("nenhuma storylet encontrada para a demonstração")
+        val sc = GameController(sg)
+        save("06-historia.png") { AppRoot(sc) }
+        val pick = sg.pendingStory!!.choices.indexOfFirst { it.available }
+        sc.choose(pick)
+        save("07-relatorio.png") { AppRoot(sc) }
+        sc.dismissReport()
+        if (sg.confrontation == null) {
+            sc.selectTab(Tab.DOSSIE)
+            save("08-dossie.png") { AppRoot(sc) }
+            sc.selectTab(Tab.ESTACAO); sc.selectStationTab(StationTab.BAR)
+            sc.buyRumor(Bar.offers(sg).first { it.kind == RumorKind.ONDE_VENDER })
+            save("09-bar.png") { AppRoot(sc) }
+        }
         return files
     }
 }

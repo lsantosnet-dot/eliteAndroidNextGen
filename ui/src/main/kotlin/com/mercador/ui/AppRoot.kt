@@ -1,0 +1,35 @@
+package com.mercador.ui
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import com.mercador.core.story.InnerVoice
+
+/**
+ * Raiz da navegação. Decisões pendentes (relatório, perseguição, confronto, história) tomam a tela
+ * inteira e só liberam a navegação por abas quando resolvidas, como no design: sem pausa.
+ */
+@Composable
+fun AppRoot(c: GameController) {
+    c.version // assina as mudanças: cada ação do controlador recompõe a raiz
+    val g = c.game
+    val report = c.report
+    val card = g.pendingStory
+    when {
+        report != null -> ReportScreen(report, c::dismissReport)
+        g.pursuit != null -> PursuitScreen(g, c::respond)
+        g.confrontation != null -> ConfrontationScreen(g, g.confrontation!!, InnerVoice.line(g), c::act)
+        card != null -> StoryScreen(card, InnerVoice.line(g), c::choose)
+        else -> when (c.tab) {
+            Tab.MAPA -> MapScreen(
+                g, c.selectedSystem ?: g.location, c::selectSystem, c::selectTab, c::travel, c.notice,
+            )
+            Tab.ESTACAO -> StationScreen(
+                g, c::selectTab,
+                StationUi(c.stationTab, c.selectedCommodity, c.quantity, c.notice, c.rumor,
+                    c::selectStationTab, c::selectCommodity, c::cycleQuantity, c::buy, c::sell, c::buyRumor),
+            )
+            Tab.DOSSIE -> DossierScreen(g, c.notice, c::selectTab, c::refuel, c::takeLoan, c::haulFreight, c::repay)
+            Tab.LIVRO -> LedgerScreen(g, InnerVoice.line(g), c::selectTab)
+        }
+    }
+}

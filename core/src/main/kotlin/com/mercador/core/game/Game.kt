@@ -345,7 +345,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         credits -= offer.price
         val text = when (offer.kind) {
             RumorKind.ONDE_VENDER -> Bar.bestSale(this)?.let { (c, d) ->
-                "No bar dizem que ${c.label.lowercase()} paga bem em ${d.name}."
+                "No bar dizem que o mercado de ${c.label.lowercase()} paga bem em ${d.name}."
             } ?: "Ninguém sabe de nada que valha o salto agora."
             RumorKind.RISCO_DA_ROTA -> {
                 val d = reachable().maxByOrNull { standing.heat(it.faction) + it.traits.surveillance }

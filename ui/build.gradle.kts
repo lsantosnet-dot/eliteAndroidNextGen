@@ -37,3 +37,10 @@ tasks.register<JavaExec>("renderScreens") {
     classpath = sourceSets["main"].runtimeClasspath
     args(rootProject.layout.projectDirectory.dir("docs/ui").asFile.path)
 }
+
+// Abre o jogo numa janela (precisa de display): ./gradlew :ui:runApp
+tasks.register<JavaExec>("runApp") {
+    group = "application"
+    mainClass.set("com.mercador.ui.MainKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}
