@@ -15,7 +15,8 @@ core/   Kotlin/JVM puro, testável sem Android SDK
   universe/  Universe (galáxia → setor → sistema, acesso direto), traços, facções e relações
   universe/Region  região jogável de 50 sistemas, distâncias, vizinhos e conectividade
   world/     Meters/MeterModel (controle, descontentamento, abastecimento) e World (deltas do mundo vivido, preços com volume)
-  game/      Game (comprar, vender, viajar, livro de contas, empréstimo/frete de socorro), Standing (atenção e reputação por facção), Pursuit (respostas à perseguição), Confrontation (cena em rodadas), Traits (traços e pessoas)
+  game/      Game (comprar, vender, viajar, livro de contas, empréstimo/frete de socorro), Standing (atenção e reputação por facção), Pursuit (respostas à perseguição), Confrontation (cena em rodadas), Traits (traços e pessoas), Bar (rumores e segredos à venda)
+  story/     Storylet/StoryEngine (eventos com condições e lacunas), StoryContent (22 storylets), InnerVoice (voz interior)
   economy/   Commodity (12 mercadorias), Laws (ideologia → contrabando) e Market (preço/estoque por sistema e dia)
 docs/   Design e protótipo visual (docs/mercador)
 ```

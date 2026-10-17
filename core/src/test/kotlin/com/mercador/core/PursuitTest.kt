@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test
 class PursuitTest {
     private fun newGame(seed: Long = 2024): Game {
         val world = World(Region.around(Universe(seed)))
-        return Game(world, world.region.systems[0], credits = 100_000)
+        return Game(world, world.region.systems[0], credits = 100_000, stories = false)
     }
 
     /** Joga até uma perseguição aparecer carregando contrabando; null se não houver em 200 saltos. */

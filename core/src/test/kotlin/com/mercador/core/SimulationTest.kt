@@ -18,7 +18,7 @@ class SimulationTest {
 
     private fun play(seed: Long, days: Int = 365): Result {
         val world = World(Region.around(Universe(seed)))
-        val g = Game(world, world.region.systems[0])
+        val g = Game(world, world.region.systems[0], stories = false)
         var trips = 0
         var maxD = 0
         var stuck = 0
@@ -76,7 +76,7 @@ class SimulationTest {
     /** Contrabandista: leva bens proibidos no destino; suborna se puder, senão entrega-se. */
     private fun smuggle(seed: Long, days: Int = 365): Triple<Int, Int, Int> {
         val world = World(Region.around(Universe(seed)))
-        val g = Game(world, world.region.systems[0])
+        val g = Game(world, world.region.systems[0], stories = false)
         var chases = 0
         var stuck = 0
         while (world.day < days && stuck < 5) {

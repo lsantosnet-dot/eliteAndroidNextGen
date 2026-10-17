@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test
 class TradeLoopTest {
     private fun newGame(seed: Long = 2024): Game {
         val world = World(Region.around(Universe(seed)))
-        return Game(world, world.region.systems[0])
+        return Game(world, world.region.systems[0], stories = false)
     }
 
     @Test

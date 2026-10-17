@@ -73,6 +73,14 @@ class World(val region: Region) {
         d[0] = d[0].coerceIn(-MAX_DELTA, MAX_DELTA); d[1] = d[1].coerceIn(-MAX_DELTA, MAX_DELTA); d[2] = d[2].coerceIn(-MAX_DELTA, MAX_DELTA)
     }
 
+    /** Empurra os medidores diretamente (eventos de história, não comércio). */
+    fun pushMeters(s: StarSystem, control: Int, discontent: Int, supply: Int) {
+        val d = meterDeltas.getOrPut(s.id) { DoubleArray(3) }
+        d[0] = (d[0] + control).coerceIn(-MAX_DELTA, MAX_DELTA)
+        d[1] = (d[1] + discontent).coerceIn(-MAX_DELTA, MAX_DELTA)
+        d[2] = (d[2] + supply).coerceIn(-MAX_DELTA, MAX_DELTA)
+    }
+
     fun advance(days: Int) {
         repeat(days) {
             day++

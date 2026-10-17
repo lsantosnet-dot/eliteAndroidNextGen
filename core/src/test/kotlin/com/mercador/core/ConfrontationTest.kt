@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 class ConfrontationTest {
     private fun newGame(seed: Long): Game {
         val world = World(Region.around(Universe(seed)))
-        return Game(world, world.region.systems[0], credits = 100_000)
+        return Game(world, world.region.systems[0], credits = 100_000, stories = false)
     }
 
     private fun chase(seed: Long): Game? {

@@ -3,6 +3,8 @@ package com.mercador.core.game
 import com.mercador.core.economy.Commodity
 import com.mercador.core.rng.Rng
 import com.mercador.core.rng.derive
+import com.mercador.core.story.StoryCard
+import com.mercador.core.story.StoryEngine
 import com.mercador.core.universe.Doctrine
 import com.mercador.core.universe.StarSystem
 import com.mercador.core.world.MeterModel
@@ -15,7 +17,7 @@ import kotlin.math.ceil
 data class LedgerEntry(val day: Int, val systemName: String, val text: String)
 
 enum class Failure {
-    SEM_DINHEIRO, SEM_PORAO, SEM_ESTOQUE, SEM_CARGA, SEM_COMBUSTIVEL, FORA_DE_ALCANCE, QUANTIDADE_INVALIDA, TANQUE_CHEIO, PERSEGUICAO_PENDENTE, SEM_PERSEGUICAO, RESPOSTA_INDISPONIVEL, SEM_DIVIDA, NAO_ELEGIVEL, SEM_CENA, POSTURA_INDISPONIVEL
+    SEM_DINHEIRO, SEM_PORAO, SEM_ESTOQUE, SEM_CARGA, SEM_COMBUSTIVEL, FORA_DE_ALCANCE, QUANTIDADE_INVALIDA, TANQUE_CHEIO, PERSEGUICAO_PENDENTE, SEM_PERSEGUICAO, RESPOSTA_INDISPONIVEL, SEM_DIVIDA, NAO_ELEGIVEL, SEM_CENA, POSTURA_INDISPONIVEL, SEM_HISTORIA, ESCOLHA_INDISPONIVEL, SEM_BAR
 }
 
 sealed interface Outcome {
@@ -26,11 +28,14 @@ sealed interface Outcome {
     data class Resolved(val resolution: Resolution) : Outcome
     /** Uma cena de confronto começou (ou segue) e espera uma postura: [Game.act]. */
     data class Confronting(val scene: Confrontation) : Outcome
+    /** Uma storylet está à espera de escolha: [Game.chooseStory]. */
+    data class Story(val card: StoryCard) : Outcome
+    data class StoryResolved(val text: String, val scene: Confrontation?) : Outcome
     data class SceneEnded(val scene: Confrontation, val ending: Ending, val text: String) : Outcome
 }
 
 /** Estado do mercador solitário e o laço comprar → viajar → vender. */
-class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS) {
+class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS, val stories: Boolean = true) {
     var location: StarSystem = start
         private set
     var fuel: Int = FUEL_CAPACITY
@@ -52,7 +57,13 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
     private val retaliations = ArrayList<Retaliation>()
     private var sceneWins = 0
     private var intimidationWins = 0
-    val busy: Boolean get() = pursuit != null || confrontation != null
+    var pendingStory: StoryCard? = null
+        private set
+    private val _voice = ArrayList<LedgerEntry>()
+    /** Voz interior: frases curtas de monólogo que reagem ao que o jogador fez (seção 8.4). */
+    val voiceLog: List<LedgerEntry> get() = _voice
+    private val storySeen = HashMap<String, Int>()
+    val busy: Boolean get() = pursuit != null || confrontation != null || pendingStory != null
 
     private class Retaliation(val due: Int, val avenger: Person)
     private val _ledger = ArrayList<LedgerEntry>()
@@ -129,7 +140,21 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         standing.cool(days)
         expireTraits()
         location = to
-        return arrive()
+        val arrived = arrive()
+        if (!stories || arrived !is Outcome.Ok) return arrived
+        val card = StoryEngine.draw(this) ?: return arrived
+        storySeen[card.storylet.id] = day
+        pendingStory = card
+        return Outcome.Story(card)
+    }
+
+    /** Escolhe uma opção da storylet pendente; o efeito e o texto do desfecho vêm da própria storylet. */
+    fun chooseStory(index: Int): Outcome {
+        val card = pendingStory ?: return Outcome.Fail(Failure.SEM_HISTORIA)
+        if (index !in card.choices.indices || !card.choices[index].available) return Outcome.Fail(Failure.ESCOLHA_INDISPONIVEL)
+        pendingStory = null
+        val text = StoryEngine.resolve(this, card, index)
+        return Outcome.StoryResolved(text, confrontation)
     }
 
     /** Provas que a lei do sistema atual enxerga no porão. */
@@ -269,15 +294,26 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         return Outcome.Ok(credits)
     }
 
-    private fun addTrait(t: Trait, days: Int?) {
+    internal fun addTrait(t: Trait, days: Int?) {
         traitExpiry[t] = if (t.permanent) null else days?.let { day + it }
     }
+
+    internal fun removeTrait(t: Trait) { traitExpiry.remove(t) }
+
+    internal fun adjustFuel(d: Int) { fuel = (fuel + d).coerceIn(0, FUEL_CAPACITY) }
+
+    internal fun addVoice(text: String) { _voice += LedgerEntry(day, location.name, text) }
+
+    /** Passa tempo fora de uma viagem: esfria a atenção e dissipa traços. */
+    internal fun passDays(n: Int) { world.advance(n); standing.cool(n); expireTraits() }
+
+    internal fun lastSeen(id: String): Int? = storySeen[id]
 
     private fun expireTraits() {
         traitExpiry.entries.removeAll { (t, until) -> until != null && until <= day && t != Trait.DEVEDOR }
     }
 
-    private fun startScene(person: Person, evidence: Map<Commodity, Int>, retaliation: Boolean): Outcome {
+    internal fun startScene(person: Person, evidence: Map<Commodity, Int>, retaliation: Boolean): Outcome {
         val f = person.faction
         val value = evidence.entries.sumOf { (c, t) -> c.basePrice * t }
         val poise = 60 + traits.sumOf { it.poise }
@@ -292,6 +328,30 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
     }
 
     private fun cargoValue() = cargo.entries.sumOf { (c, t) -> c.basePrice * t }
+
+    /** Compra um rumor no bar (só atracado e livre de pendências). Devolve o texto verdadeiro. */
+    fun buyRumor(offer: BarOffer): Pair<Outcome, String?> {
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE) to null
+        if (credits < offer.price) return Outcome.Fail(Failure.SEM_DINHEIRO) to null
+        credits -= offer.price
+        val text = when (offer.kind) {
+            RumorKind.ONDE_VENDER -> Bar.bestSale(this)?.let { (c, d) ->
+                "No bar dizem que ${c.label.lowercase()} paga bem em ${d.name}."
+            } ?: "Ninguém sabe de nada que valha o salto agora."
+            RumorKind.RISCO_DA_ROTA -> {
+                val d = reachable().maxByOrNull { standing.heat(it.faction) + it.traits.surveillance }
+                if (d == null) "Sem combustível, a rota não importa." else {
+                    val p = PursuitRules.encounterChance(standing.heat(d.faction), d.traits.surveillance, evidenceFor(d).isNotEmpty(), standing.isRestricted(d.faction))
+                    "Em ${d.name}, a patrulha de ${d.faction.name} te abordaria com ${(p * 100).toInt()}% de chance."
+                }
+            }
+            RumorKind.SEGREDO -> { grantSecret(offer.about!!); "Você sai do bar sabendo algo sobre ${offer.about.name} que não devia." }
+        }
+        note("Pagou ${offer.price} cr por informação no bar.")
+        return Outcome.Ok(credits) to text
+    }
+
+    private fun evidenceFor(d: StarSystem) = cargo.filter { (c, _) -> c.bannedBy(d.traits.ideology) }
 
     /** Posturas disponíveis agora (seção 8.2). */
     fun postures(): List<Posture> {
@@ -418,7 +478,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         }
     }
 
-    private fun note(text: String) { _ledger += LedgerEntry(day, location.name, text) }
+    internal fun note(text: String) { _ledger += LedgerEntry(day, location.name, text) }
 
     companion object {
         const val START_CREDITS = 1000
