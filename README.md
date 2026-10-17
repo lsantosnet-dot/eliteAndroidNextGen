@@ -14,6 +14,8 @@ core/   Kotlin/JVM puro, testável sem Android SDK
   rng/       SplitMix64: mix64, derive (árvore de sementes por hash), Rng
   universe/  Universe (galáxia → setor → sistema, acesso direto), traços, facções e relações
   universe/Region  região jogável de 50 sistemas, distâncias, vizinhos e conectividade
+  world/     Meters/MeterModel (controle, descontentamento, abastecimento) e World (deltas do mundo vivido, preços com volume)
+  game/      Game: comprar, vender, reabastecer, viajar e o livro de contas
   economy/   Commodity (12 mercadorias), Laws (ideologia → contrabando) e Market (preço/estoque por sistema e dia)
 docs/   Design e protótipo visual (docs/mercador)
 ```
@@ -23,7 +25,7 @@ docs/   Design e protótipo visual (docs/mercador)
 ## Roteiro (seção 11 do design)
 
 1. ✅ **Dados e gerador** em Kotlin puro, com testes — universo, sistemas, facções, mercadorias, preços por sistema e região de 50 sistemas
-2. ⬜ Laço de comércio + medidores (controle, descontentamento, abastecimento)
+2. ✅ Laço de comércio + medidores (controle, descontentamento, abastecimento) — com simulação de 1 ano (risco R2)
 3. ⬜ Leis, atenção e perseguição por decisões
 4. ⬜ Confronto por rodadas, traços e livro de contas
 5. ⬜ Storylets e voz interior
