@@ -12,6 +12,7 @@ enum class Response(val label: String) {
     BLEFAR("Blefar"),
     FUGIR("Fugir para a base"),
     ENTREGAR_SE("Entregar-se e negociar"),
+    CONFRONTAR("Confrontar"),
 }
 
 /** Patrulha que alcançou o jogador carregando [evidence] (toneladas de contrabando por mercadoria). */

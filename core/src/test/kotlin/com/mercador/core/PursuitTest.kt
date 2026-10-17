@@ -88,7 +88,7 @@ class PursuitTest {
 
     @Test
     fun `cada resposta resolve e tem o custo prometido`() {
-        for (r in Response.values()) {
+        for (r in Response.values().filter { it != Response.CONFRONTAR }) {
             val g = (1L..30L).firstNotNullOfOrNull { chase(it) } ?: error("sem perseguição")
             if (r !in g.responses()) continue
             val tons = g.pursuit!!.evidenceTons

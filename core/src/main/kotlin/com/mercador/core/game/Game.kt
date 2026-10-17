@@ -3,6 +3,7 @@ package com.mercador.core.game
 import com.mercador.core.economy.Commodity
 import com.mercador.core.rng.Rng
 import com.mercador.core.rng.derive
+import com.mercador.core.universe.Doctrine
 import com.mercador.core.universe.StarSystem
 import com.mercador.core.world.MeterModel
 import com.mercador.core.world.Side
@@ -14,7 +15,7 @@ import kotlin.math.ceil
 data class LedgerEntry(val day: Int, val systemName: String, val text: String)
 
 enum class Failure {
-    SEM_DINHEIRO, SEM_PORAO, SEM_ESTOQUE, SEM_CARGA, SEM_COMBUSTIVEL, FORA_DE_ALCANCE, QUANTIDADE_INVALIDA, TANQUE_CHEIO, PERSEGUICAO_PENDENTE, SEM_PERSEGUICAO, RESPOSTA_INDISPONIVEL, SEM_DIVIDA, NAO_ELEGIVEL
+    SEM_DINHEIRO, SEM_PORAO, SEM_ESTOQUE, SEM_CARGA, SEM_COMBUSTIVEL, FORA_DE_ALCANCE, QUANTIDADE_INVALIDA, TANQUE_CHEIO, PERSEGUICAO_PENDENTE, SEM_PERSEGUICAO, RESPOSTA_INDISPONIVEL, SEM_DIVIDA, NAO_ELEGIVEL, SEM_CENA, POSTURA_INDISPONIVEL
 }
 
 sealed interface Outcome {
@@ -23,6 +24,9 @@ sealed interface Outcome {
     /** A viagem terminou, mas uma patrulha alcançou o jogador: resolver com [Game.respond]. */
     data class Pursued(val pursuit: Pursuit) : Outcome
     data class Resolved(val resolution: Resolution) : Outcome
+    /** Uma cena de confronto começou (ou segue) e espera uma postura: [Game.act]. */
+    data class Confronting(val scene: Confrontation) : Outcome
+    data class SceneEnded(val scene: Confrontation, val ending: Ending, val text: String) : Outcome
 }
 
 /** Estado do mercador solitário e o laço comprar → viajar → vender. */
@@ -38,11 +42,31 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         private set
     var debt: Int = 0
         private set
+    var confrontation: Confrontation? = null
+        private set
+    private val traitExpiry = HashMap<Trait, Int?>()
+    val traits: Set<Trait> get() = traitExpiry.keys
+    /** Segredos usáveis como moeda, por facção sobre a qual se sabe algo. */
+    private val secrets = ArrayList<Int>()
+    private val favors = IntArray(factions.factions.size)
+    private val retaliations = ArrayList<Retaliation>()
+    private var sceneWins = 0
+    private var intimidationWins = 0
+    val busy: Boolean get() = pursuit != null || confrontation != null
+
+    private class Retaliation(val due: Int, val avenger: Person)
     private val _ledger = ArrayList<LedgerEntry>()
     val ledger: List<LedgerEntry> get() = _ledger
 
     val day: Int get() = world.day
     val faction get() = location.faction
+    fun hasTrait(t: Trait) = t in traitExpiry
+    fun favors(f: com.mercador.core.universe.Faction) = favors[f.id]
+    fun secretsAbout(f: com.mercador.core.universe.Faction) = secrets.count { it == f.id }
+    fun grantFavor(f: com.mercador.core.universe.Faction) { favors[f.id] = (favors[f.id] + 1).coerceAtMost(3) }
+    fun grantSecret(f: com.mercador.core.universe.Faction) { secrets += f.id }
+    fun hasFame() = traitExpiry.keys.any { it.feared }
+    fun pendingRetaliations() = retaliations.size
     fun isIllegalHere(c: Commodity) = c.bannedBy(location.traits.ideology)
     val holdUsed: Int get() = cargo.values.sum()
     val holdFree: Int get() = HOLD_CAPACITY - holdUsed
@@ -55,7 +79,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         world.region.systems.filter { it !== location && fuelCost(it) <= fuel }.sortedBy { world.region.distanceLy(location, it) }
 
     fun buy(c: Commodity, tons: Int): Outcome {
-        if (pursuit != null) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
         if (tons <= 0) return Outcome.Fail(Failure.QUANTIDADE_INVALIDA)
         if (tons > world.quote(location, c).stock) return Outcome.Fail(Failure.SEM_ESTOQUE)
         if (tons > holdFree) return Outcome.Fail(Failure.SEM_PORAO)
@@ -69,7 +93,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
     }
 
     fun sell(c: Commodity, tons: Int): Outcome {
-        if (pursuit != null) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
         if (tons <= 0) return Outcome.Fail(Failure.QUANTIDADE_INVALIDA)
         val have = cargo[c] ?: 0
         if (tons > have) return Outcome.Fail(Failure.SEM_CARGA)
@@ -83,7 +107,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
     }
 
     fun refuel(): Outcome {
-        if (pursuit != null) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
         val missing = FUEL_CAPACITY - fuel
         if (missing == 0) return Outcome.Fail(Failure.TANQUE_CHEIO)
         val cost = missing * FUEL_PRICE
@@ -94,7 +118,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
     }
 
     fun travel(to: StarSystem): Outcome {
-        if (pursuit != null) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
         if (to === location || to !in world.region.systems) return Outcome.Fail(Failure.FORA_DE_ALCANCE)
         val cost = fuelCost(to)
         if (cost > FUEL_CAPACITY) return Outcome.Fail(Failure.FORA_DE_ALCANCE)
@@ -103,6 +127,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         val days = travelDays(to)
         world.advance(days)
         standing.cool(days)
+        expireTraits()
         location = to
         return arrive()
     }
@@ -115,6 +140,10 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
      * Sem provas, a patrulha só revista; com provas, abre uma perseguição.
      */
     private fun arrive(): Outcome {
+        retaliations.firstOrNull { it.due <= day }?.let { r ->
+            retaliations.remove(r)
+            return startScene(r.avenger, emptyMap(), retaliation = true)
+        }
         val f = faction
         val restricted = standing.isRestricted(f)
         if (restricted) standing.addHeat(f, 10)
@@ -191,6 +220,11 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
                     caught(p, r, "A fuga falhou.")
                 }
             }
+            Response.CONFRONTAR -> {
+                pursuit = null
+                val person = People.generate(Rng(derive(location.seedKey(), day.toLong(), 0x9E0)), f)
+                return startScene(person, p.evidence, retaliation = false)
+            }
             Response.ENTREGAR_SE -> {
                 val fine = minOf(PursuitRules.surrenderFine(p), credits / 2)
                 credits -= fine
@@ -206,9 +240,10 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
 
     /** Rede de segurança contra o beco sem saída: falido e de porão vazio, o mercador pode se endividar (traço Devedor). */
     fun takeLoan(): Outcome {
-        if (pursuit != null) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
         if (debt > 0 || credits >= LOAN_THRESHOLD || holdUsed > 0) return Outcome.Fail(Failure.NAO_ELEGIVEL)
         credits += LOAN_AMOUNT
+        addTrait(Trait.DEVEDOR, null)
         debt = LOAN_AMOUNT + LOAN_AMOUNT / 5
         note("Pediu $LOAN_AMOUNT cr emprestados; deve $debt.")
         return Outcome.Ok(credits)
@@ -216,11 +251,12 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
 
     /** Segunda rede: frete miúdo que gasta tempo e não dá lucro de verdade. Garante que toda ruína é recuperável. */
     fun haulFreight(): Outcome {
-        if (pursuit != null) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
         if (credits >= FREIGHT_THRESHOLD || holdUsed > 0) return Outcome.Fail(Failure.NAO_ELEGIVEL)
         credits += FREIGHT_PAY
         world.advance(FREIGHT_DAYS)
         standing.cool(FREIGHT_DAYS)
+        expireTraits()
         note("Carregou frete miúdo por $FREIGHT_DAYS dias para pagar o combustível.")
         return Outcome.Ok(credits)
     }
@@ -229,9 +265,116 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         if (debt == 0) return Outcome.Fail(Failure.SEM_DIVIDA)
         val pay = minOf(credits, debt)
         credits -= pay; debt -= pay
-        if (debt == 0) note("Quitou a dívida.")
+        if (debt == 0) { note("Quitou a dívida."); traitExpiry.remove(Trait.DEVEDOR) }
         return Outcome.Ok(credits)
     }
+
+    private fun addTrait(t: Trait, days: Int?) {
+        traitExpiry[t] = if (t.permanent) null else days?.let { day + it }
+    }
+
+    private fun expireTraits() {
+        traitExpiry.entries.removeAll { (t, until) -> until != null && until <= day && t != Trait.DEVEDOR }
+    }
+
+    private fun startScene(person: Person, evidence: Map<Commodity, Int>, retaliation: Boolean): Outcome {
+        val f = person.faction
+        val value = evidence.entries.sumOf { (c, t) -> c.basePrice * t }
+        val poise = 60 + traits.sumOf { it.poise }
+        val playerLev = 20 + standing.reputation(f) / 5 + favors[f.id] * 10 + secrets.count { it == f.id } * 15 + cargoValue() / 100
+        val oppPoise = 45 + when (f.doctrine) { Doctrine.BRUTAL -> 15; Doctrine.BUROCRATICA -> 5; Doctrine.COBRADORA -> 10; Doctrine.MERCANTIL -> 0 }
+        val oppLev = 30 + location.traits.surveillance / 2 + value / 100 + if (retaliation) 20 else 0
+        val key = derive(location.seedKey(), person.name.hashCode().toLong())
+        val scene = Confrontation(person, evidence, retaliation, poise, playerLev, oppPoise, oppLev,
+            Confrontation.rounds(location.traits.surveillance, key), key, day)
+        confrontation = scene
+        return Outcome.Confronting(scene)
+    }
+
+    private fun cargoValue() = cargo.entries.sumOf { (c, t) -> c.basePrice * t }
+
+    /** Posturas disponíveis agora (seção 8.2). */
+    fun postures(): List<Posture> {
+        val s = confrontation ?: return emptyList()
+        val f = s.opponent.faction
+        return Posture.values().filter {
+            when (it) {
+                Posture.INTIMIDAR -> hasFame()
+                Posture.EXPOR_SEGREDO -> secretsAbout(f) > 0
+                Posture.COBRAR_FAVOR -> favors[f.id] > 0
+                Posture.SACRIFICAR -> !s.retaliation && s.evidence.isNotEmpty() && !s.sacrificed
+                else -> true
+            }
+        }
+    }
+
+    /** Joga uma rodada da cena. Encerra a cena e aplica as consequências quando ela termina. */
+    fun act(posture: Posture): Outcome {
+        val s = confrontation ?: return Outcome.Fail(Failure.SEM_CENA)
+        if (posture !in postures()) return Outcome.Fail(Failure.POSTURA_INDISPONIVEL)
+        val f = s.opponent.faction
+        when (posture) {
+            Posture.EXPOR_SEGREDO -> secrets.remove(f.id)
+            Posture.COBRAR_FAVOR -> favors[f.id]--
+            Posture.SACRIFICAR -> dropHalfEvidence(s)
+            else -> {}
+        }
+        s.step(posture, hasFame())
+        val ending = s.ending ?: return Outcome.Confronting(s)
+        return finish(s, ending)
+    }
+
+    private fun dropHalfEvidence(s: Confrontation) {
+        for ((c, t) in s.evidence) {
+            val drop = (t + 1) / 2
+            val left = (cargo[c] ?: 0) - drop
+            if (left <= 0) cargo.remove(c) else cargo[c] = left
+        }
+    }
+
+    /** Toda cena vira uma linha do livro de contas que nunca é apagada (seção 8.4). */
+    private fun finish(s: Confrontation, ending: Ending): Outcome {
+        confrontation = null
+        val f = s.opponent.faction
+        val who = "${s.opponent.name}, ${s.opponent.role} de ${f.name}"
+        val text: String
+        when (ending) {
+            Ending.ELE_CEDEU -> {
+                standing.addHeat(f, -15); standing.addReputation(f, -1)
+                sceneWins++
+                intimidationWins += s.intimidations
+                if (sceneWins >= 3) addTrait(Trait.CALEJADO, null)
+                if (intimidationWins >= 2) addTrait(Trait.FRIO, 120)
+                text = "Diante de $who, foi o outro lado que cedeu."
+            }
+            Ending.VOCE_CEDEU, Ending.EMPATE -> {
+                val left = remainingEvidence(s)
+                val lostEvidence = left.values.sum()
+                val fine = if (s.retaliation) credits / 4 else {
+                    val p = Pursuit(location, f, left)
+                    if (ending == Ending.VOCE_CEDEU) PursuitRules.fine(p) else PursuitRules.surrenderFine(p)
+                }.coerceAtMost(credits / 2)
+                credits -= fine
+                confiscate(Pursuit(location, f, left))
+                standing.setHeatAtMost(f, 20); standing.addReputation(f, -3)
+                if (ending == Ending.VOCE_CEDEU) addTrait(Trait.INSONE, 60)
+                text = (if (ending == Ending.VOCE_CEDEU) "Você cedeu a $who" else "Sem vencedor diante de $who") +
+                    ": perdeu ${lostEvidence} t de carga e pagou $fine cr."
+            }
+            Ending.VIOLENCIA -> {
+                standing.addHeat(f, 40); standing.addReputation(f, -30)
+                addTrait(Trait.MARCADO, null); addTrait(Trait.INSONE, 90)
+                val avenger = People.generate(Rng(derive(location.seedKey(), day.toLong(), 0xE7E)), f, "parente de ${s.opponent.name}")
+                retaliations += Retaliation(day + Rng(derive(location.seedKey(), day.toLong(), 0xD1E)).range(30, 90), avenger)
+                text = "Você partiu para a violência contra $who. ${avenger.name} não vai esquecer."
+            }
+        }
+        note(text)
+        return Outcome.SceneEnded(s, ending, text)
+    }
+
+    private fun remainingEvidence(s: Confrontation): Map<Commodity, Int> =
+        s.evidence.mapValues { (_, t) -> if (s.sacrificed) t - (t + 1) / 2 else t }.filterValues { it > 0 }
 
     private fun confiscate(p: Pursuit) {
         for ((c, t) in p.evidence) {
@@ -265,6 +408,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         if (c in MeterModel.essential && before.rationing && tons >= 5) {
             note("Entregou $tons t de ${c.label} durante o racionamento.")
             standing.addReputation(faction, Math.max(1, tons / 5))
+            if (tons >= 10) grantFavor(faction)
         }
         if (c == Commodity.ARMAS && tons >= 5 && before.discontent >= 60) {
             note("Vendeu $tons t de armas a um poder que o povo já não suporta.")
