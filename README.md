@@ -18,11 +18,12 @@ core/   Kotlin/JVM puro, testável sem Android SDK
   game/      Save (GameSave, SaveCodec, SaveStore: salvamento só do mundo vivido), Slots (vários jogos salvos), Game (comprar, vender, viajar, livro de contas, empréstimo/frete de socorro), Standing (atenção e reputação por facção), Pursuit (respostas à perseguição), Confrontation (cena em rodadas), Traits (traços e pessoas), Bar (rumores e segredos à venda)
   story/     Storylet/StoryEngine (eventos com condições e lacunas), StoryContent (22 storylets), InnerVoice (voz interior)
   economy/   Commodity (12 mercadorias), Laws (ideologia → contrabando) e Market (preço/estoque por sistema e dia)
+app/    App Android (Activity + ViewModel que guarda o jogo; reaproveita o código de ui/ sem as classes só de PC). Só entra no build com Android SDK
 ui/     Interface Compose (dossiê noir): tema, telas (Mapa, Estação com mercado/dossiê/bar, Dossiê, Livro, Perseguição, Confronto, História, Relatório), GameController (estado e ações) e AppRoot (navegação); Preview renderiza PNGs sem janela
 docs/   Design e protótipo visual (docs/mercador)
 ```
 
-Ainda falta o `:app` Android (empacotar o `:ui`) e a edição de nome dos jogos salvos na interface.
+Ainda falta a edição de nome dos jogos salvos na interface e testar o app num aparelho/emulador (o APK compila, mas nunca foi executado).
 
 ## Roteiro (seção 11 do design)
 
@@ -34,6 +35,12 @@ Ainda falta o `:app` Android (empacotar o `:ui`) e a edição de nome dos jogos 
 6. ✅ Polimento visual "dossiê noir": tema e as 4 telas das maquetes em Compose, renderizadas de verdade em [`docs/ui`](docs/ui)
 
 ## Build
+
+### Android Studio
+
+Abra a pasta do repositório (`File ▸ Open`), deixe o Gradle sincronizar (o Studio cria o `local.properties` com o SDK) e rode a configuração **app** num emulador ou aparelho com Android 8.0+ (API 26). Pela linha de comando: `./gradlew :app:assembleDebug` (APK em `app/build/outputs/apk/debug`). Os jogos ficam em `filesDir/saves` do app.
+
+### Linha de comando
 
 Requisitos: JDK 17+.
 
