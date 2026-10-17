@@ -14,7 +14,10 @@ class StarSystem(
     val y: Int,
     val traits: SystemTraits,
     val faction: Faction,
-)
+) {
+    /** Chave estável para derivar valores por sistema (mercado, eventos) sem depender de ordem. */
+    fun seedKey(): Long = derive(id.galaxy, id.sx.toLong(), id.sy.toLong(), id.index.toLong())
+}
 
 /**
  * Universo por hash: qualquer galáxia/setor é gerado direto da semente, sem gerar os anteriores

@@ -13,7 +13,8 @@ testável sem Android SDK, universo por semente, economia por mercadoria). Voo 3
 core/   Kotlin/JVM puro, testável sem Android SDK
   rng/       SplitMix64: mix64, derive (árvore de sementes por hash), Rng
   universe/  Universe (galáxia → setor → sistema, acesso direto), traços, facções e relações
-  economy/   Commodity (12 mercadorias) e Laws (ideologia → bens proibidos = contrabando)
+  universe/Region  região jogável de 50 sistemas, distâncias, vizinhos e conectividade
+  economy/   Commodity (12 mercadorias), Laws (ideologia → contrabando) e Market (preço/estoque por sistema e dia)
 docs/   Design e protótipo visual (docs/mercador)
 ```
 
@@ -21,7 +22,7 @@ docs/   Design e protótipo visual (docs/mercador)
 
 ## Roteiro (seção 11 do design)
 
-1. 🚧 **Dados e gerador** em Kotlin puro, com testes — universo, sistemas, facções, mercadorias *(base pronta; faltam preços por sistema e região de ~50 sistemas)*
+1. ✅ **Dados e gerador** em Kotlin puro, com testes — universo, sistemas, facções, mercadorias, preços por sistema e região de 50 sistemas
 2. ⬜ Laço de comércio + medidores (controle, descontentamento, abastecimento)
 3. ⬜ Leis, atenção e perseguição por decisões
 4. ⬜ Confronto por rodadas, traços e livro de contas
