@@ -45,6 +45,10 @@ data class GameSave(
     val sceneWins: Int,
     val intimidationWins: Int,
     val storySeen: Map<String, Int>,
+    /** Metadados do slot (não afetam o jogo; defaults mantêm saves antigos legíveis). */
+    val name: String = "",
+    val savedAt: Long = 0,
+    val locationName: String = "",
 ) {
     companion object { const val VERSION = 1 }
 }
@@ -58,7 +62,7 @@ object SaveCodec {
 
     fun decode(text: String): GameSave {
         val save = try { json.decodeFromString(GameSave.serializer(), text) } catch (e: Exception) {
-            throw SaveException("Arquivo de save ilegível: ${e.message?.lineSequence()?.firstOrNull()}", e)
+            throw SaveException("Arquivo de save ilegível ou corrompido.", e)
         }
         if (save.version != GameSave.VERSION) throw SaveException("Versão de save ${save.version} não suportada (esperada ${GameSave.VERSION}).")
         return save

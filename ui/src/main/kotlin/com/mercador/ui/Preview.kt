@@ -117,6 +117,20 @@ object Preview {
             sc.buyRumor(Bar.offers(sg).first { it.kind == RumorKind.ONDE_VENDER })
             save("09-bar.png") { AppRoot(sc) }
         }
+
+        // 10: jogos salvos, com um jogo em andamento, outro mais antigo, um ilegível e a confirmação de apagar
+        val dir = java.nio.file.Files.createTempDirectory("mercador-preview").toFile()
+        var t = 1_760_000_000_000L
+        val slots = com.mercador.core.game.SaveSlots(dir) { t += 3_600_000L * 5; t }
+        val first = freshGame(2024)
+        val id1 = slots.create(first, "Rota do Qube")
+        val second = freshGame(77).also { it.credits = 18_240 }
+        val id2 = slots.create(second, "A fuga")
+        java.io.File(dir, "slot-3.json").writeText("{ quebrado")
+        val menu = GameController(second, slots = slots, activeSlot = id2, newGameFactory = { freshGame() })
+        menu.openSlots(); menu.deleteSlot(id1)
+        save("10-jogos.png") { AppRoot(menu) }
+        dir.deleteRecursively()
         return files
     }
 }

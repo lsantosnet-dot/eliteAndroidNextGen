@@ -514,6 +514,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
             retaliations = retaliations.map { RetaliationSave(it.due, PersonSave(it.avenger.name, it.avenger.role, it.avenger.faction.id)) },
             sceneWins = sceneWins, intimidationWins = intimidationWins,
             storySeen = storySeen.toSortedMap(),
+            locationName = location.name,
         )
     }
 

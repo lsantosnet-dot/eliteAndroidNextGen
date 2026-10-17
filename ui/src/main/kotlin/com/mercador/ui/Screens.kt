@@ -135,7 +135,7 @@ fun ReportScreen(report: Report, onContinue: () -> Unit = {}) {
 
 /** Dossiê do mercador: estado, tanque, atenção por facção, favores e segredos. */
 @Composable
-fun DossierScreen(game: Game, notice: String?, onTab: (Tab) -> Unit = {}, onRefuel: () -> Unit = {}, onLoan: () -> Unit = {}, onFreight: () -> Unit = {}, onRepay: () -> Unit = {}) {
+fun DossierScreen(game: Game, notice: String?, onTab: (Tab) -> Unit = {}, onRefuel: () -> Unit = {}, onLoan: () -> Unit = {}, onFreight: () -> Unit = {}, onRepay: () -> Unit = {}, onSlots: () -> Unit = {}) {
     Column(Modifier.fillMaxSize().background(Noir.bg)) {
         Column(Modifier.fillMaxWidth().background(Noir.panel).padding(16.dp)) {
             T("DOSSIÊ", 22f, Noir.text, Noir.serif, spacing = 2f)
@@ -176,6 +176,7 @@ fun DossierScreen(game: Game, notice: String?, onTab: (Tab) -> Unit = {}, onRefu
                 if (game.debt > 0) OutlineButton("Pagar dívida", Modifier.fillMaxWidth(), Noir.teal, onRepay)
                 OutlineButton("Pedir empréstimo de socorro", Modifier.fillMaxWidth(), Noir.sub, onLoan)
                 OutlineButton("Pegar frete miúdo (5 dias)", Modifier.fillMaxWidth(), Noir.sub, onFreight)
+                OutlineButton("Jogos salvos · novo jogo", Modifier.fillMaxWidth(), Noir.violet, onSlots)
             }
         }
         BottomNav(Tab.DOSSIE, onSelect = onTab)

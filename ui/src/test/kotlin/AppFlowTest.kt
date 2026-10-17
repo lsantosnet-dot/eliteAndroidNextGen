@@ -6,6 +6,7 @@ import androidx.compose.ui.unit.Density
 import com.mercador.core.economy.Commodity
 import com.mercador.core.game.*
 import com.mercador.core.game.SaveStore
+import com.mercador.core.game.SaveSlots
 import com.mercador.core.universe.Region
 import com.mercador.core.universe.Universe
 import com.mercador.core.world.World
@@ -117,7 +118,7 @@ class AppFlowTest {
         val dir = java.nio.file.Files.createTempDirectory("mercador-ui").toFile()
         val store = SaveStore(java.io.File(dir, "save.json"))
         val world = World(Region.around(Universe(2024)))
-        val c = GameController(Game(world, world.region.systems[0], credits = 5_000, stories = false)) { store.autosave(it) }
+        val c = GameController(Game(world, world.region.systems[0], credits = 5_000, stories = false), onChange = { store.autosave(it) })
         assertFalse(store.exists())
         val com = Commodity.values().first { c.game.world.quote(c.game.location, it).stock >= 3 && !it.bannedBy(c.game.location.traits.ideology) }
         c.selectCommodity(com); c.buy()
@@ -128,5 +129,107 @@ class AppFlowTest {
         assertEquals(c.game.location.id, back.location.id)
         assertEquals(c.game.cargo.toMap(), back.cargo.toMap())
         dir.deleteRecursively()
+    }
+}
+
+class SlotsFlowTest {
+    private fun newWorldGame(seed: Long): Game {
+        val world = World(Region.around(Universe(seed)))
+        return Game(world, world.region.systems[0], stories = false)
+    }
+
+    private class Env {
+        val dir = java.nio.file.Files.createTempDirectory("mercador-ui-slots").toFile()
+        var t = 0L
+        val slots = SaveSlots(dir) { t++ }
+        var seeds = 10L
+    }
+
+    private fun env(): Pair<Env, GameController> {
+        val e = Env()
+        val first = newWorldGame(1)
+        val id = e.slots.create(first)
+        val c = GameController(first, slots = e.slots, activeSlot = id, newGameFactory = { newWorldGame(e.seeds++) })
+        return e to c
+    }
+
+    @Test
+    fun `novo jogo cria slot, troca de universo e limpa o estado da interface`() {
+        val (e, c) = env()
+        val old = c.game
+        c.selectTab(Tab.MAPA); c.selectSystem(old.reachable().first())
+        c.openSlots(); assertTrue(c.showSlots)
+        c.newGame()
+        assertNotSame(old, c.game)
+        assertEquals(2, c.slotId); assertFalse(c.showSlots)
+        assertEquals(Tab.ESTACAO, c.tab); assertNull(c.selectedSystem)
+        assertEquals(2, e.slots.list().size)
+        assertNotEquals(old.world.region.universe.seed, c.game.world.region.universe.seed)
+        e.dir.deleteRecursively()
+    }
+
+    @Test
+    fun `cada jogo grava no proprio slot, sem vazar para o outro`() {
+        val (e, c) = env()
+        c.game.credits = 111; c.selectTab(Tab.DOSSIE) // qualquer ação grava
+        c.newGame()
+        c.game.credits = 999; c.selectTab(Tab.LIVRO)
+        assertEquals(111, e.slots.load(1).credits)
+        assertEquals(999, e.slots.load(2).credits)
+        c.loadSlot(1)
+        assertEquals(111, c.game.credits); assertEquals(1, c.slotId)
+        c.selectTab(Tab.MAPA)
+        assertEquals(999, e.slots.load(2).credits) // o jogo 2 não foi tocado
+        e.dir.deleteRecursively()
+    }
+
+    @Test
+    fun `apagar pede confirmacao e apagar o jogo atual abre outro ou comeca um novo`() {
+        val (e, c) = env()
+        c.newGame() // agora há 1 e 2, atual = 2
+        c.deleteSlot(1)
+        assertEquals(1, c.pendingDelete); assertEquals(2, e.slots.list().size) // só pediu confirmação
+        c.deleteSlot(1)
+        assertNull(c.pendingDelete); assertEquals(listOf(2), e.slots.list().map { it.id })
+        c.deleteSlot(2); c.deleteSlot(2) // apaga o em jogo, sem outro restante
+        assertEquals(1, e.slots.list().size)
+        assertEquals(c.slotId, e.slots.list().single().id)
+        assertTrue(c.notice!!.contains("novo"))
+        e.dir.deleteRecursively()
+    }
+
+    @Test
+    fun `nao troca de jogo com decisao pendente e slot ilegivel nao carrega`() {
+        val (e, c) = env()
+        var busy: GameController? = null
+        for (seed in 1L..40L) {
+            val world = World(Region.around(Universe(seed)))
+            val g = Game(world, world.region.systems[0], credits = 4_000)
+            val cc = GameController(g, slots = e.slots, activeSlot = e.slots.create(g), newGameFactory = { newWorldGame(99) })
+            repeat(100) { if (!g.busy) { g.refuel(); g.travel(g.reachable().first()) } }
+            if (g.busy) { busy = cc; break }
+        }
+        val b = busy ?: error("nenhuma decisão pendente")
+        val n = e.slots.list().size
+        b.newGame(); assertEquals(n, e.slots.list().size)
+        assertTrue(b.notice!!.contains("Resolva"))
+        b.openSlots(); assertFalse(b.showSlots)
+
+        java.io.File(e.dir, "slot-50.json").writeText("quebrado")
+        c.loadSlot(50)
+        assertEquals(1, c.slotId) // continua no jogo em que estava
+        assertTrue(c.notice!!.contains("ilegível"))
+        e.dir.deleteRecursively()
+    }
+
+    @Test
+    fun `a lista de jogos renderiza com ativo, apagar e slot ilegivel`() {
+        val (e, c) = env()
+        c.newGame()
+        java.io.File(e.dir, "slot-9.json").writeText("quebrado")
+        c.openSlots(); c.deleteSlot(1)
+        val png = Preview.png { AppRoot(c) }
+        assertTrue(png.size > 5_000)
+        e.dir.deleteRecursively()
     }
 }
