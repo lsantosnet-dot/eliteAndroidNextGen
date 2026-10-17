@@ -69,15 +69,44 @@ class SaveTest {
     }
 
     @Test
-    fun `partidas salvas no meio nao perdem nada de interessante`() {
-        // alguma partida precisa ter traços, retaliações e livro, senão o teste acima não provaria nada
-        var traits = 0; var retaliations = 0; var ledger = 0; var secretsOrFavors = 0
-        for (seed in 1L..8L) {
+    fun `o roteiro gera livro, e traco, segredo e favor entram no save mesmo sem depender do acaso`() {
+        for (seed in 1L..4L) {
             val g = newGame(seed); play(g, 120)
-            traits += g.traits.size; retaliations += g.pendingRetaliations(); ledger += g.ledger.size
-            secretsOrFavors += g.factions.factions.sumOf { g.favors(it) + g.secretsAbout(it) }
+            assertTrue(g.ledger.isNotEmpty(), "livro vazio na seed $seed")
+            val f = g.factions.factions
+            g.grantTrait(Trait.CALEJADO); g.grantTrait(Trait.FRIO, 45)
+            g.grantSecret(f[0]); g.grantSecret(f[0]); g.grantFavor(f[1])
+            val secrets = g.secretsAbout(f[0]); val favors = g.favors(f[1])
+            assertTrue(secrets >= 2)
+            val back = roundTrip(g)
+            assertEquals(g.toSave(), back.toSave())
+            assertTrue(back.hasTrait(Trait.CALEJADO)); assertEquals(g.traitDaysLeft(Trait.FRIO), back.traitDaysLeft(Trait.FRIO))
+            assertEquals(secrets, back.secretsAbout(f[0])); assertEquals(favors, back.favors(f[1]))
         }
-        assertTrue(ledger > 0, "livro vazio"); assertTrue(traits > 0, "sem traços"); assertTrue(retaliations > 0, "sem retaliações")
+    }
+
+    @Test
+    fun `retaliacao a caminho sobrevive ao save com o mesmo prazo e a mesma pessoa`() {
+        for (seed in 1L..40L) {
+            val g = newGame(seed)
+            var chased = false
+            repeat(150) {
+                if (chased) return@repeat
+                g.refuel()
+                val dest = g.reachable().firstOrNull() ?: return@repeat
+                val c = Commodity.values().firstOrNull { it.bannedBy(dest.traits.ideology) && !it.bannedBy(g.location.traits.ideology) && g.world.quote(g.location, it).stock > 0 }
+                if (c != null) g.buy(c, minOf(g.holdFree, g.world.quote(g.location, c).stock, 6))
+                if (g.travel(dest) is Outcome.Pursued) chased = true else g.standing.addHeat(dest.faction, 25)
+            }
+            if (!chased) continue
+            g.respond(Response.CONFRONTAR); g.act(Posture.VIOLENCIA)
+            if (g.pendingRetaliations() == 0) continue
+            val back = roundTrip(g)
+            assertEquals(g.openConsequences().map { it.first.name to it.second }, back.openConsequences().map { it.first.name to it.second })
+            assertTrue(back.hasTrait(Trait.MARCADO))
+            return
+        }
+        error("nenhuma retaliação gerada")
     }
 
     @Test

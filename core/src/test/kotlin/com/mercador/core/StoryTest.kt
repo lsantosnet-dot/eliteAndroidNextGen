@@ -18,7 +18,7 @@ class StoryTest {
     @Test
     fun `conteudo e consistente`() {
         val all = StoryContent.all
-        assertTrue(all.size >= 20, "storylets: ${all.size}")
+        assertTrue(all.size >= 42, "storylets: ${all.size}")
         assertEquals(all.size, all.map { it.id }.toSet().size)
         for (s in all) {
             assertTrue(s.choices.isNotEmpty() && s.text.isNotBlank() && s.triggers.isNotEmpty() && s.weight > 0, s.id)
@@ -163,5 +163,36 @@ class StoryTest {
 
         g.credits = 0
         assertEquals(Outcome.Fail(Failure.SEM_DINHEIRO), g.buyRumor(offers[0]).first)
+    }
+
+    @Test
+    fun `toda escolha de toda storylet roda sem quebrar invariantes nem deixar lacunas`() {
+        val traits = listOf(Trait.CALEJADO, Trait.MARCADO, Trait.INSONE, Trait.DEVEDOR)
+        for (seed in 1L..3L) for (story in StoryContent.all) for ((i, choice) in story.choices.withIndex()) {
+            val g = newGame(seed, stories = false)
+            g.credits = 10_000
+            for (c in Commodity.values()) g.cargo[c] = 1
+            traits.forEach { g.grantTrait(it, 60) }
+            val ops = Ops(g, com.mercador.core.rng.Rng(seed * 31 + i))
+            val text = StoryEngine.fill(g, choice.run(ops), seed)
+            val ctx = "${story.id}#$i"
+            assertFalse(text.contains("{") || text.isBlank(), ctx)
+            assertTrue(g.credits >= 0, ctx); assertTrue(g.fuel in 0..Game.FUEL_CAPACITY, ctx)
+            assertTrue(g.holdUsed <= Game.HOLD_CAPACITY + Commodity.values().size, ctx)
+            for (l in g.ledger + g.voiceLog) assertFalse(l.text.contains("{"), "$ctx: ${l.text}")
+            val m = g.world.meters(g.location)
+            assertTrue(m.control in 0..100 && m.discontent in 0..100 && m.supply in 0..100, ctx)
+        }
+    }
+
+    @Test
+    fun `nenhuma storylet fica sem saida e as dicas nao deixam placeholders`() {
+        val g = newGame(1, stories = false)
+        for (s in StoryContent.all) {
+            // numa situação sem nada (sem dinheiro, sem carga), a escolha "gratuita" tem de existir quando a condição valer
+            val card = StoryEngine.card(g, s, Trigger.CHEGADA, 1L)
+            for (c in card.choices) assertFalse((c.label + c.hint).contains("{"), s.id)
+            if (s.cond(g)) assertTrue(card.choices.any { it.available }, "${s.id} sem opção disponível quando a condição vale")
+        }
     }
 }

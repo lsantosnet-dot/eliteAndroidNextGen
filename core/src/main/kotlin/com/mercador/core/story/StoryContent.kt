@@ -17,7 +17,8 @@ object StoryContent {
     private fun Game.m(): Meters = world.meters(location)
     private fun Game.carryingBanned() = cargo.keys.any { isIllegalHere(it) }
 
-    val all: List<Storylet> = listOf(
+    /** Primeiro lote; os demais ficam em arquivos próprios (StoryContentLote2...) e se somam em [all]. */
+    private val lote1: List<Storylet> = listOf(
         Storylet("mercador-em-apuros", "Mercador em apuros", setOf(S), 10, { it.fuel >= 6 },
             "Um cargueiro à deriva pede combustível pelo canal aberto. O tanque dele está seco; o seu não está cheio, mas dá para repartir.",
             listOf(
@@ -278,4 +279,6 @@ object StoryContent {
                 },
             )),
     )
+
+    val all: List<Storylet> = lote1 + StoryContentLote2.all
 }

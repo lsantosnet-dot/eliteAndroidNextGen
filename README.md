@@ -16,7 +16,7 @@ core/   Kotlin/JVM puro, testável sem Android SDK
   universe/Region  região jogável de 50 sistemas, distâncias, vizinhos e conectividade
   world/     Meters/MeterModel (controle, descontentamento, abastecimento) e World (deltas do mundo vivido, preços com volume)
   game/      Save (GameSave, SaveCodec, SaveStore: salvamento só do mundo vivido), Slots (vários jogos salvos), Game (comprar, vender, viajar, livro de contas, empréstimo/frete de socorro), Standing (atenção e reputação por facção), Pursuit (respostas à perseguição), Confrontation (cena em rodadas), Traits (traços e pessoas), Bar (rumores e segredos à venda)
-  story/     Storylet/StoryEngine (eventos com condições e lacunas), StoryContent (22 storylets), InnerVoice (voz interior)
+  story/     Storylet/StoryEngine (eventos com condições e lacunas), StoryContent + StoryContentLote2 (42 storylets), InnerVoice (voz interior)
   economy/   Commodity (12 mercadorias), Laws (ideologia → contrabando) e Market (preço/estoque por sistema e dia)
 app/    App Android (Activity + ViewModel que guarda o jogo; reaproveita o código de ui/ sem as classes só de PC). Só entra no build com Android SDK
 ui/     Interface Compose (dossiê noir): tema, telas (Mapa, Estação com mercado/dossiê/bar, animação de hiperespaço no salto, Dossiê, Livro, Perseguição, Confronto, História, Relatório), GameController (estado e ações) e AppRoot (navegação); Preview renderiza PNGs sem janela
