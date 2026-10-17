@@ -18,10 +18,11 @@ core/   Kotlin/JVM puro, testável sem Android SDK
   game/      Game (comprar, vender, viajar, livro de contas, empréstimo/frete de socorro), Standing (atenção e reputação por facção), Pursuit (respostas à perseguição), Confrontation (cena em rodadas), Traits (traços e pessoas), Bar (rumores e segredos à venda)
   story/     Storylet/StoryEngine (eventos com condições e lacunas), StoryContent (22 storylets), InnerVoice (voz interior)
   economy/   Commodity (12 mercadorias), Laws (ideologia → contrabando) e Market (preço/estoque por sistema e dia)
+ui/     Interface Compose (dossiê noir): tema, componentes e as 4 telas das maquetes (Mapa, Estação, Confronto, Livro) sobre o :core; Preview renderiza PNGs sem janela
 docs/   Design e protótipo visual (docs/mercador)
 ```
 
-`:app` (Jetpack Compose + Room para os deltas do mundo vivido) entra na etapa 2.
+Ainda falta o `:app` Android (navegação, ViewModel e Room para os deltas do mundo vivido).
 
 ## Roteiro (seção 11 do design)
 
@@ -30,12 +31,16 @@ docs/   Design e protótipo visual (docs/mercador)
 3. ✅ Leis, atenção e perseguição por decisões (sem o confronto, que é a etapa 4)
 4. ✅ Confronto por rodadas, traços e livro de contas
 5. ⬜ Storylets e voz interior
-6. ⬜ Polimento visual "dossiê noir"
+6. 🚧 Polimento visual "dossiê noir": tema e 4 telas escritas e compilando; **ainda não executadas** (ver Build)
 
 ## Build
 
 Requisitos: JDK 17+.
 
 ```bash
-./gradlew :core:test
+./gradlew :core:test                 # lógica do jogo
+./gradlew :ui:test                   # renderiza as 4 telas sem janela e confere que não saem em branco
+./gradlew :ui:renderScreens           # gera os PNGs das telas em docs/ui
 ```
+
+O `:ui` usa Compose Multiplatform (desktop/JVM) e precisa baixar `androidx.annotation`, `androidx.collection` e `androidx.lifecycle` do Google Maven (`dl.google.com`).

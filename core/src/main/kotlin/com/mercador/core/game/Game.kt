@@ -78,6 +78,15 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
     fun grantSecret(f: com.mercador.core.universe.Faction) { secrets += f.id }
     fun hasFame() = traitExpiry.keys.any { it.feared }
     fun pendingRetaliations() = retaliations.size
+
+    /** Consequências em aberto, à vista do jogador no livro (seção 10.1): quem virá e quando. */
+    fun openConsequences(): List<Pair<Person, Int>> = retaliations.map { it.avenger to it.due }
+
+    /** Concede um traço (também usado para restaurar um save). */
+    fun grantTrait(t: Trait, days: Int? = null) = addTrait(t, days)
+
+    /** Dias restantes de um traço que se dissipa; null se permanente ou ausente. */
+    fun traitDaysLeft(t: Trait): Int? = traitExpiry[t]?.let { (it - day).coerceAtLeast(0) }
     fun isIllegalHere(c: Commodity) = c.bannedBy(location.traits.ideology)
     val holdUsed: Int get() = cargo.values.sum()
     val holdFree: Int get() = HOLD_CAPACITY - holdUsed
