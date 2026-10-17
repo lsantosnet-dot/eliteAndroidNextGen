@@ -18,7 +18,7 @@ class StoryTest {
     @Test
     fun `conteudo e consistente`() {
         val all = StoryContent.all
-        assertTrue(all.size >= 42, "storylets: ${all.size}")
+        assertTrue(all.size >= 62, "storylets: ${all.size}")
         assertEquals(all.size, all.map { it.id }.toSet().size)
         for (s in all) {
             assertTrue(s.choices.isNotEmpty() && s.text.isNotBlank() && s.triggers.isNotEmpty() && s.weight > 0, s.id)

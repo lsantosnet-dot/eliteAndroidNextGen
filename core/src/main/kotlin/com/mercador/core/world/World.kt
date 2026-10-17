@@ -24,7 +24,7 @@ class World(val region: Region) {
     private val volumes = HashMap<Pair<SystemId, Commodity>, Double>()
 
     fun meters(s: StarSystem): Meters {
-        val base = MeterModel.baseline(s.traits)
+        val base = MeterModel.baseline(s.traits, s.seedKey())
         val d = meterDeltas[s.id]
         val control = clamp(base[0] + (d?.get(0) ?: 0.0))
         val supply = clamp(base[2] + (d?.get(2) ?: 0.0))

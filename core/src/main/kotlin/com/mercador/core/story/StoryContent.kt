@@ -280,5 +280,5 @@ object StoryContent {
             )),
     )
 
-    val all: List<Storylet> = lote1 + StoryContentLote2.all
+    val all: List<Storylet> = lote1 + StoryContentLote2.all + StoryContentLote3.all
 }
