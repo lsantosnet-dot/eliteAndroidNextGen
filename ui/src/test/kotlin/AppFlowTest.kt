@@ -5,6 +5,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.unit.Density
 import com.mercador.core.economy.Commodity
 import com.mercador.core.game.*
+import com.mercador.core.game.SaveStore
 import com.mercador.core.universe.Region
 import com.mercador.core.universe.Universe
 import com.mercador.core.world.World
@@ -109,5 +110,23 @@ class AppFlowTest {
             tap(630f, 1430f); assertEquals(Tab.LIVRO, c.tab)
             tap(270f, 1430f); assertEquals(Tab.ESTACAO, c.tab)
         } finally { scene.close() }
+    }
+
+    @Test
+    fun `o controlador salva sozinho a cada acao calma e o jogo volta como estava`() {
+        val dir = java.nio.file.Files.createTempDirectory("mercador-ui").toFile()
+        val store = SaveStore(java.io.File(dir, "save.json"))
+        val world = World(Region.around(Universe(2024)))
+        val c = GameController(Game(world, world.region.systems[0], credits = 5_000, stories = false)) { store.autosave(it) }
+        assertFalse(store.exists())
+        val com = Commodity.values().first { c.game.world.quote(c.game.location, it).stock >= 3 && !it.bannedBy(c.game.location.traits.ideology) }
+        c.selectCommodity(com); c.buy()
+        assertTrue(store.exists())
+        c.selectTab(Tab.MAPA); c.selectSystem(c.game.reachable().first()); c.travel()
+        val back = Game.fromSave(store.read())
+        assertEquals(c.game.toSave(), back.toSave())
+        assertEquals(c.game.location.id, back.location.id)
+        assertEquals(c.game.cargo.toMap(), back.cargo.toMap())
+        dir.deleteRecursively()
     }
 }

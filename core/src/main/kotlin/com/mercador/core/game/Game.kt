@@ -489,7 +489,73 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
 
     internal fun note(text: String) { _ledger += LedgerEntry(day, location.name, text) }
 
+    /** Pode salvar agora? Com uma decisão pendente, o último momento calmo é que vale. */
+    val canSave: Boolean get() = !busy
+
+    /** Foto do mundo vivido (ver [GameSave]). Decisões pendentes ficam de fora. */
+    fun toSave(): GameSave {
+        val (deltas, vols) = world.exportDeltas()
+        fun ref(s: StarSystem) = SysRef(s.id.sx, s.id.sy, s.id.index)
+        fun ref(id: com.mercador.core.universe.SystemId) = SysRef(id.sx, id.sy, id.index)
+        return GameSave(
+            universeSeed = world.region.universe.seed, galaxy = world.region.galaxy,
+            region = world.region.systems.map(::ref), stories = stories, day = world.day,
+            meterDeltas = deltas.entries.sortedWith(compareBy({ it.key.sx }, { it.key.sy }, { it.key.index }))
+                .map { (k, d) -> MeterDeltaSave(ref(k), d[0], d[1], d[2]) },
+            volumes = vols.entries.sortedWith(compareBy({ it.key.first.sx }, { it.key.first.sy }, { it.key.first.index }, { it.key.second.ordinal }))
+                .map { (k, v) -> VolumeSave(ref(k.first), k.second.name, v) },
+            credits = credits, fuel = fuel, debt = debt, location = ref(location),
+            cargo = cargo.entries.sortedBy { it.key.ordinal }.associate { it.key.name to it.value },
+            ledger = _ledger.map { LedgerSave(it.day, it.systemName, it.text) },
+            voice = _voice.map { LedgerSave(it.day, it.systemName, it.text) },
+            traits = traitExpiry.entries.sortedBy { it.key.ordinal }.map { TraitSave(it.key.name, it.value) },
+            secrets = secrets.toList(), favors = favors.toList(),
+            heat = standing.heatValues(), reputation = standing.reputationValues(),
+            retaliations = retaliations.map { RetaliationSave(it.due, PersonSave(it.avenger.name, it.avenger.role, it.avenger.faction.id)) },
+            sceneWins = sceneWins, intimidationWins = intimidationWins,
+            storySeen = storySeen.toSortedMap(),
+        )
+    }
+
     companion object {
+        /** Reconstrói o jogo: o mundo gerado vem da semente, o vivido vem do [save]. */
+        fun fromSave(save: GameSave): Game {
+            val universe = com.mercador.core.universe.Universe(save.universeSeed)
+            fun sys(r: SysRef) = universe.system(com.mercador.core.universe.SystemId(save.galaxy, r.sx, r.sy, r.index))
+                ?: throw SaveException("Sistema ${r.sx},${r.sy}#${r.index} não existe neste universo.")
+            val systems = save.region.map(::sys)
+            val world = World(com.mercador.core.universe.Region(universe, save.galaxy, systems))
+            fun id(r: SysRef) = com.mercador.core.universe.SystemId(save.galaxy, r.sx, r.sy, r.index)
+            fun <T : Enum<T>> named(cls: Class<T>, name: String): T =
+                cls.enumConstants.firstOrNull { it.name == name } ?: throw SaveException("Valor desconhecido no save: $name")
+            world.restore(
+                save.day,
+                save.meterDeltas.associate { id(it.system) to doubleArrayOf(it.control, it.discontent, it.supply) },
+                save.volumes.associate { (id(it.system) to named(Commodity::class.java, it.commodity)) to it.tons },
+            )
+            // o local atual tem de ser a MESMA instância da lista da região: o jogo compara sistemas por identidade
+            val here = world.region.systems.firstOrNull { it.id == id(save.location) }
+                ?: throw SaveException("A localização do save não pertence à região.")
+            val g = Game(world, here, save.credits, save.stories)
+            g.fuel = save.fuel.coerceIn(0, FUEL_CAPACITY)
+            g.debt = save.debt
+            save.cargo.forEach { (k, v) -> g.cargo[named(Commodity::class.java, k)] = v }
+            save.ledger.forEach { g._ledger += LedgerEntry(it.day, it.system, it.text) }
+            save.voice.forEach { g._voice += LedgerEntry(it.day, it.system, it.text) }
+            save.traits.forEach { g.traitExpiry[named(Trait::class.java, it.trait)] = it.until }
+            g.secrets += save.secrets
+            if (save.favors.size != g.favors.size) throw SaveException("Número de facções diferente do save.")
+            save.favors.forEachIndexed { i, v -> g.favors[i] = v }
+            try { g.standing.restore(save.heat, save.reputation) } catch (e: IllegalArgumentException) { throw SaveException(e.message ?: "save inválido", e) }
+            for (r in save.retaliations) {
+                val f = g.factions.factions.firstOrNull { it.id == r.avenger.faction } ?: throw SaveException("Facção desconhecida no save.")
+                g.retaliations += Retaliation(r.due, Person(r.avenger.name, r.avenger.role, f))
+            }
+            g.sceneWins = save.sceneWins; g.intimidationWins = save.intimidationWins
+            g.storySeen.putAll(save.storySeen)
+            return g
+        }
+
         const val START_CREDITS = 1000
         const val HOLD_CAPACITY = 20
         const val FUEL_CAPACITY = 20

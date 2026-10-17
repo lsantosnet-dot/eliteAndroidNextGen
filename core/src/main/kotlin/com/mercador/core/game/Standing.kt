@@ -28,6 +28,14 @@ class Standing(private val map: FactionMap) {
         }
     }
 
+    internal fun heatValues(): List<Int> = heat.toList()
+    internal fun reputationValues(): List<Int> = rep.toList()
+    internal fun restore(heat: List<Int>, rep: List<Int>) {
+        require(heat.size == this.heat.size && rep.size == this.rep.size) { "número de facções diferente do save" }
+        heat.forEachIndexed { i, v -> this.heat[i] = v.coerceIn(0, 100) }
+        rep.forEachIndexed { i, v -> this.rep[i] = v.coerceIn(-100, 100) }
+    }
+
     fun cool(days: Int) { for (i in heat.indices) heat[i] = (heat[i] - days * COOL_PER_DAY).coerceAtLeast(0) }
 
     /** Zona proibida: o poder local já o trata como inimigo (seção 7.2). */

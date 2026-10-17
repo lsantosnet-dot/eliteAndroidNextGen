@@ -81,6 +81,16 @@ class World(val region: Region) {
         d[2] = (d[2] + supply).coerceIn(-MAX_DELTA, MAX_DELTA)
     }
 
+    /** Diferenças do mundo vivido, para o salvamento. */
+    internal fun exportDeltas(): Pair<Map<SystemId, DoubleArray>, Map<Pair<SystemId, Commodity>, Double>> =
+        meterDeltas.mapValues { it.value.copyOf() } to HashMap(volumes)
+
+    internal fun restore(day: Int, deltas: Map<SystemId, DoubleArray>, vols: Map<Pair<SystemId, Commodity>, Double>) {
+        this.day = day
+        meterDeltas.clear(); deltas.forEach { (k, v) -> meterDeltas[k] = v.copyOf() }
+        volumes.clear(); volumes.putAll(vols)
+    }
+
     fun advance(days: Int) {
         repeat(days) {
             day++

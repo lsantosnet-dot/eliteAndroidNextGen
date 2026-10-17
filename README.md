@@ -15,14 +15,14 @@ core/   Kotlin/JVM puro, testável sem Android SDK
   universe/  Universe (galáxia → setor → sistema, acesso direto), traços, facções e relações
   universe/Region  região jogável de 50 sistemas, distâncias, vizinhos e conectividade
   world/     Meters/MeterModel (controle, descontentamento, abastecimento) e World (deltas do mundo vivido, preços com volume)
-  game/      Game (comprar, vender, viajar, livro de contas, empréstimo/frete de socorro), Standing (atenção e reputação por facção), Pursuit (respostas à perseguição), Confrontation (cena em rodadas), Traits (traços e pessoas), Bar (rumores e segredos à venda)
+  game/      Save (GameSave, SaveCodec, SaveStore: salvamento só do mundo vivido), Game (comprar, vender, viajar, livro de contas, empréstimo/frete de socorro), Standing (atenção e reputação por facção), Pursuit (respostas à perseguição), Confrontation (cena em rodadas), Traits (traços e pessoas), Bar (rumores e segredos à venda)
   story/     Storylet/StoryEngine (eventos com condições e lacunas), StoryContent (22 storylets), InnerVoice (voz interior)
   economy/   Commodity (12 mercadorias), Laws (ideologia → contrabando) e Market (preço/estoque por sistema e dia)
 ui/     Interface Compose (dossiê noir): tema, telas (Mapa, Estação com mercado/dossiê/bar, Dossiê, Livro, Perseguição, Confronto, História, Relatório), GameController (estado e ações) e AppRoot (navegação); Preview renderiza PNGs sem janela
 docs/   Design e protótipo visual (docs/mercador)
 ```
 
-Ainda falta o `:app` Android (empacotar o `:ui`) e o salvamento dos deltas do mundo vivido.
+Ainda falta o `:app` Android (empacotar o `:ui`) e um botão de "novo jogo" na interface.
 
 ## Roteiro (seção 11 do design)
 
@@ -41,7 +41,7 @@ Requisitos: JDK 17+.
 ./gradlew :core:test                 # lógica do jogo
 ./gradlew :ui:test                   # renderiza as 4 telas sem janela e confere que não saem em branco
 ./gradlew :ui:renderScreens           # gera os PNGs das telas em docs/ui
-./gradlew :ui:runApp                 # abre o jogo numa janela (precisa de display)
+./gradlew :ui:runApp                 # abre o jogo numa janela (precisa de display); salva sozinho em ~/.mercador/save.json
 ```
 
 O `:ui` usa Compose Multiplatform (desktop/JVM) e baixa `androidx.*` do Google Maven (`dl.google.com`).
