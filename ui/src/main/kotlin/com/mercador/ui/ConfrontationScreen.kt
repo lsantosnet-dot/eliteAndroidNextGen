@@ -30,9 +30,9 @@ fun ConfrontationScreen(game: Game, scene: Confrontation, voice: String, onPostu
     val fc = Noir.faction(f)
     val danger = Noir.red
     Column(Modifier.fillMaxSize().background(Color(0xFF0A0709))) {
-        Box(Modifier.fillMaxWidth().height(232.dp)) {
+        Box(Modifier.fillMaxWidth().height(196.dp)) {
             Canvas(Modifier.fillMaxSize()) {
-                val c = Offset(size.width / 2, size.height * .5f)
+                val c = Offset(size.width / 2, size.height * .42f)
                 drawCircle(Brush.radialGradient(listOf(danger.copy(alpha = .45f), Color.Transparent), c, size.height * .62f), size.height * .62f, c)
                 for (r in listOf(50f, 90f, 130f)) drawCircle(Color(0xFF2A1A1C), r * density, c, style = Stroke(1f * density))
                 val k = density
@@ -53,7 +53,7 @@ fun ConfrontationScreen(game: Game, scene: Confrontation, voice: String, onPostu
                 T("${scene.opponent.name} · doutrina: ${doctrineLine(scene.doctrine)}", 10f, Noir.muted, Noir.mono, align = TextAlign.Center)
             }
         }
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Meter("Seu sangue-frio", scene.playerCool / 100f, Noir.teal, Modifier.weight(1f))
                 Meter("Deles", scene.opponentCool / 100f, danger, Modifier.weight(1f))
@@ -70,12 +70,12 @@ fun ConfrontationScreen(game: Game, scene: Confrontation, voice: String, onPostu
             T(voice, 12f, Noir.sub, Noir.serif, italic = true, lineHeight = 17f)
         }
         Spacer(Modifier.height(8.dp))
-        Column(Modifier.padding(horizontal = 10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Column(Modifier.padding(horizontal = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             for (p in game.postures()) PostureRow(p, onPosture)
         }
         Spacer(Modifier.weight(1f))
         Box(Modifier.fillMaxWidth().height(1.dp).background(Noir.line))
-        Box(Modifier.fillMaxWidth().background(Noir.panel).padding(14.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().background(Noir.panel).padding(10.dp), contentAlignment = Alignment.Center) {
             T("ATENÇÃO DE ${f.name.uppercase()} ${attentionBars(game.standing.heat(f))} · sem pausa", 11f, Noir.muted, Noir.mono, spacing = 1f)
         }
     }
@@ -103,7 +103,7 @@ private fun PostureRow(p: Posture, onPosture: (Posture) -> Unit) {
         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
             .background(if (violent) Noir.dangerBg else Noir.panel)
             .border(1.dp, if (violent) Noir.dangerLine else Noir.line, RoundedCornerShape(8.dp))
-            .clickable { onPosture(p) }.padding(horizontal = 12.dp, vertical = 7.dp),
+            .clickable { onPosture(p) }.padding(horizontal = 12.dp, vertical = 5.dp),
     ) {
         T(p.label, 14f, title, weight = FontWeight.Bold)
         T(p.cost.replaceFirstChar { it.uppercase() }, 11.5f, if (violent) Color(0xFFA56A62) else Noir.sub)

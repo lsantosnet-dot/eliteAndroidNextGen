@@ -31,7 +31,7 @@ Ainda falta o `:app` Android (navegação, ViewModel e Room para os deltas do mu
 3. ✅ Leis, atenção e perseguição por decisões (sem o confronto, que é a etapa 4)
 4. ✅ Confronto por rodadas, traços e livro de contas
 5. ⬜ Storylets e voz interior
-6. 🚧 Polimento visual "dossiê noir": tema e 4 telas escritas e compilando; **ainda não executadas** (ver Build)
+6. ✅ Polimento visual "dossiê noir": tema e as 4 telas das maquetes em Compose, renderizadas de verdade em [`docs/ui`](docs/ui)
 
 ## Build
 
@@ -43,4 +43,6 @@ Requisitos: JDK 17+.
 ./gradlew :ui:renderScreens           # gera os PNGs das telas em docs/ui
 ```
 
-O `:ui` usa Compose Multiplatform (desktop/JVM) e precisa baixar `androidx.annotation`, `androidx.collection` e `androidx.lifecycle` do Google Maven (`dl.google.com`).
+O `:ui` usa Compose Multiplatform (desktop/JVM) e baixa `androidx.*` do Google Maven (`dl.google.com`).
+
+![Mapa](docs/ui/01-mapa.png) ![Estação](docs/ui/02-estacao.png) ![Confronto](docs/ui/03-confronto.png) ![Livro](docs/ui/04-livro.png)

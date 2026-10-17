@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -43,13 +44,13 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
         Box(Modifier.fillMaxWidth().height(1.dp).background(Noir.line))
         val measurer = rememberTextMeasurer()
         Box(Modifier.fillMaxWidth().weight(1f)) {
-            Canvas(Modifier.fillMaxSize()) {
+            Canvas(Modifier.fillMaxSize().clipToBounds()) {
                 val pad = 36f * density
                 val xs = region.systems.map { it.x }; val ys = region.systems.map { it.y }
                 val minX = xs.min().toFloat(); val maxX = xs.max().toFloat(); val minY = ys.min().toFloat(); val maxY = ys.max().toFloat()
                 fun pos(s: StarSystem) = Offset(
                     pad + (s.x - minX) / (maxX - minX).coerceAtLeast(1f) * (size.width - 2 * pad),
-                    pad + 24f * density + (s.y - minY) / (maxY - minY).coerceAtLeast(1f) * (size.height - 2 * pad - 24f * density),
+                    pad + 36f * density + (s.y - minY) / (maxY - minY).coerceAtLeast(1f) * (size.height - 2 * pad - 36f * density),
                 )
                 // grade
                 val step = 60f * density
@@ -63,7 +64,7 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
                     drawCircle(Brush.radialGradient(listOf(Noir.faction(f).copy(alpha = .28f), Color.Transparent), c, 150f * density), 150f * density, c)
                 }
                 // rotas: vizinhos ao alcance
-                for (s in region.systems) for (n in region.neighbors(s, 8.0).take(2)) {
+                for (s in region.systems) for (n in region.neighbors(s, 8.0).take(1)) {
                     drawLine(Noir.muted.copy(alpha = .35f), pos(s), pos(n), 1f * density)
                 }
                 // zona interditada: facção que o trata como inimigo
@@ -72,27 +73,35 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
                     if (mine.isNotEmpty()) {
                         val c = Offset(mine.map { pos(it).x }.average().toFloat(), mine.map { pos(it).y }.average().toFloat())
                         drawCircle(Noir.red, 55f * density, c, style = Stroke(1.5f * density, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f * density, 5f * density))))
-                        drawText(measurer, "ZONA INTERDITADA", c + Offset(-60f * density, -72f * density), TextStyle(Noir.red, 10.sp, letterSpacing = 3.sp))
+                        drawText(measurer.measure("ZONA INTERDITADA", TextStyle(Noir.red, 10.sp, letterSpacing = 3.sp)), topLeft = c + Offset(-60f * density, -72f * density))
                     }
                 }
                 // rota planejada
                 if (selected !== game.location) drawLine(Noir.amber, pos(game.location), pos(selected), 2f * density,
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f * density, 5f * density)))
-                // sistemas
-                for (s in region.systems) {
+                // sistemas; rótulos só onde cabem (aqui, selecionado e vizinhos afastados), para não empilhar texto
+                val labeled = ArrayList<Offset>()
+                val ordered = region.systems.sortedByDescending { it === game.location || it === selected }
+                for (s in ordered) {
                     val p = pos(s); val col = Noir.faction(s.faction)
                     val here = s === game.location; val sel = s === selected
                     drawCircle(col, (if (here || sel) 5f else 3.5f) * density, p)
                     if (here || sel) drawCircle(if (here) Noir.text else Noir.amber, 9f * density, p, style = Stroke(2f * density))
-                    drawText(measurer, s.name, p + Offset(10f * density, -8f * density),
-                        TextStyle(if (sel) Noir.amber else Noir.text.copy(alpha = .8f), 11.sp, fontStyle = FontStyle.Normal))
+                    val free = labeled.none { (it - p).getDistance() < 46f * density }
+                    if (here || sel || free) {
+                        labeled += p
+                        drawText(measurer.measure(s.name, TextStyle(if (sel) Noir.amber else Noir.text.copy(alpha = .8f), 11.sp, fontStyle = FontStyle.Normal)),
+                            topLeft = p + Offset(10f * density, -8f * density))
+                    }
                 }
                 // legenda
                 var lx = 14f * density
+                var ly = 18f * density
                 for (f in factions) {
-                    drawCircle(Noir.faction(f), 4f * density, Offset(lx, 18f * density))
                     val r = measurer.measure(f.name, TextStyle(Noir.muted, 10.sp))
-                    drawText(r, topLeft = Offset(lx + 9f * density, 11f * density))
+                    if (lx + 9f * density + r.size.width > size.width - 8f * density) { lx = 14f * density; ly += 16f * density }
+                    drawCircle(Noir.faction(f), 4f * density, Offset(lx, ly))
+                    drawText(r, topLeft = Offset(lx + 9f * density, ly - 7f * density))
                     lx += 9f * density + r.size.width + 14f * density
                 }
             }
@@ -110,7 +119,7 @@ private fun SystemCard(game: Game, s: StarSystem) {
     val chance = PursuitRules.encounterChance(game.standing.heat(s.faction), s.traits.surveillance,
         game.cargo.keys.any { it.bannedBy(s.traits.ideology) }, game.standing.isRestricted(s.faction))
     val risk = when { chance < .15 -> "baixo"; chance < .35 -> "médio"; else -> "alto" }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = 10.dp, vertical = 8.dp)) {
         Box(Modifier.width(4.dp).fillMaxHeight().background(color))
         Card(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {

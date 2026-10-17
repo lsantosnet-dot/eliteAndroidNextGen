@@ -152,7 +152,7 @@ private fun Skyline(seed: Long, color: Color) {
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width; val h = size.height
         drawRect(Brush.verticalGradient(listOf(Color(0xFF14110C), Noir.bg)))
-        val sun = Offset(w * .78f, h * .3f)
+        val sun = Offset(w * .74f, h * .5f)
         drawCircle(Brush.radialGradient(listOf(color.copy(alpha = .35f), Color.Transparent), sun, h * .6f), h * .6f, sun)
         drawCircle(color, 22f * density, sun)
         val rng = Rng(derive(seed, 0x5C7))

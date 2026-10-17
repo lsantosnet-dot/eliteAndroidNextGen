@@ -3,6 +3,7 @@ package com.mercador.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,7 +33,7 @@ fun LedgerScreen(game: Game, voice: String, onTab: (Tab) -> Unit = {}) {
         Column(Modifier.weight(1f).padding(horizontal = 16.dp, vertical = 14.dp)) {
             Label("Quem você está se tornando")
             Spacer(Modifier.height(10.dp))
-            FlowRow(game)
+            TraitChips(game)
             Spacer(Modifier.height(10.dp))
             T("“$voice”", 13f, Noir.sub, Noir.serif, italic = true)
             Spacer(Modifier.height(14.dp))
@@ -67,7 +68,7 @@ fun LedgerScreen(game: Game, voice: String, onTab: (Tab) -> Unit = {}) {
                 Card(Modifier.fillMaxWidth(), border = Noir.dangerLine, fill = Noir.dangerBg) {
                     Label("Consequência em aberto", Noir.salmon)
                     Spacer(Modifier.height(4.dp))
-                    T("${p.name}, ${p.role}, ainda está viva e sabe onde procurar.", 13f, Noir.text, Noir.serif, lineHeight = 18f)
+                    T("${p.name}, ${p.role}, ainda está por aí e sabe onde procurar.", 13f, Noir.text, Noir.serif, lineHeight = 18f)
                     T("chegada prevista: dia ~$due", 10.5f, Color(0xFFA56A62), Noir.mono, align = TextAlign.End, modifier = Modifier.fillMaxWidth())
                 }
             }
@@ -78,17 +79,14 @@ fun LedgerScreen(game: Game, voice: String, onTab: (Tab) -> Unit = {}) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FlowRow(game: Game) {
+private fun TraitChips(game: Game) {
     val traits = game.traits.toList()
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (t in traits.take(3)) Chip(t, game)
+    if (traits.isEmpty()) { T("Nenhum traço ainda.", 12f, Noir.sub, Noir.serif, italic = true); return }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (t in traits) Chip(t, game)
     }
-    if (traits.size > 3) {
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { for (t in traits.drop(3)) Chip(t, game) }
-    }
-    if (traits.isEmpty()) T("Nenhum traço ainda.", 12f, Noir.sub, Noir.serif, italic = true)
 }
 
 @Composable

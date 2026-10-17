@@ -76,8 +76,8 @@ fun OutlineButton(text: String, modifier: Modifier = Modifier, color: Color = No
     ) { T(text.uppercase(), 13f, color, weight = FontWeight.Bold, spacing = 1.5f) }
 }
 
-/** Barras de atenção ▮▮▮▯▯ em texto, como na maquete. */
+/** Barras de atenção ■■■□□ em texto, como na maquete. */
 fun attentionBars(heat: Int): String {
     val n = (heat / 20).coerceIn(0, 5)
-    return "▮".repeat(n) + "▯".repeat(5 - n)
+    return "■".repeat(n) + "□".repeat(5 - n)
 }
