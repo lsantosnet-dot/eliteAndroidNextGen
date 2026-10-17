@@ -48,6 +48,9 @@ class GameController(
     var notice by mutableStateOf<String?>(null)
     var rumor by mutableStateOf<String?>(null)
     var report by mutableStateOf<Report?>(null)
+    /** Animação de hiperespaço em curso; some sozinha ao terminar ([finishJump]) ou ao toque. */
+    var jump by mutableStateOf<Jump?>(null)
+        private set
 
     private fun touch() {
         version++
@@ -115,6 +118,7 @@ class GameController(
     fun selectCommodity(c: Commodity) { selectedCommodity = c; touch() }
     fun cycleQuantity() { quantity = when (quantity) { 1 -> 5; 5 -> 10; else -> 1 }; touch() }
     fun dismissReport() { report = null; touch() }
+    fun finishJump() { if (jump != null) { jump = null; version++ } }
 
     fun buy() {
         val c = selectedCommodity ?: return fail("Escolha uma mercadoria.")
@@ -147,10 +151,18 @@ class GameController(
 
     fun travel() {
         val to = selectedSystem ?: return fail("Escolha um destino no mapa.")
+        val from = game.location
+        val ly = game.fuelCost(to)
+        val days = game.travelDays(to)
         when (val o = game.travel(to)) {
             is Outcome.Fail -> fail(describe(o.reason))
-            is Outcome.Ok -> { notice = "Chegou a ${to.name}."; selectedSystem = null; tab = Tab.ESTACAO; stationTab = StationTab.MERCADO; touch() }
-            else -> { selectedSystem = null; tab = Tab.ESTACAO; touch() } // perseguição ou história: a tela troca sozinha
+            else -> {
+                // Saltou: a animação sempre toca antes de a chegada (estação, perseguição ou história) aparecer.
+                jump = Jump(from.name, to.name, ly, days)
+                selectedSystem = null; tab = Tab.ESTACAO; stationTab = StationTab.MERCADO
+                if (o is Outcome.Ok) notice = "Chegou a ${to.name}."
+                touch()
+            }
         }
     }
 

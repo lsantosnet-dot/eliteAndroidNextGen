@@ -15,6 +15,7 @@ fun AppRoot(c: GameController) {
     val report = c.report
     val card = g.pendingStory
     when {
+        c.jump != null -> HyperspaceJump(c.jump!!, c::finishJump)
         c.showSlots -> SlotsScreen(c.slotList(), c.slotId, c.pendingDelete, c.notice, c::loadSlot, c::deleteSlot, c::newGame, c::closeSlots)
         report != null -> ReportScreen(report, c::dismissReport)
         g.pursuit != null -> PursuitScreen(g, c::respond)

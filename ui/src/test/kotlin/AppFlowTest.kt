@@ -233,3 +233,82 @@ class SlotsFlowTest {
         e.dir.deleteRecursively()
     }
 }
+
+class HyperspaceTest {
+    private fun controller(): GameController {
+        val world = World(Region.around(Universe(2024)))
+        return GameController(Game(world, world.region.systems[0], credits = 5_000, stories = false))
+    }
+
+    @Test
+    fun `saltar liga a animacao com origem, destino e custo, e o jogo ja esta no destino`() {
+        val c = controller()
+        val from = c.game.location
+        val dest = c.game.reachable().first()
+        val ly = c.game.fuelCost(dest); val days = c.game.travelDays(dest)
+        c.selectSystem(dest); c.travel()
+        val j = c.jump!!
+        assertEquals(from.name, j.from); assertEquals(dest.name, j.to); assertEquals(ly, j.ly); assertEquals(days, j.days)
+        assertEquals(dest, c.game.location)
+        val v = c.version
+        c.finishJump()
+        assertNull(c.jump); assertTrue(c.version > v)
+        c.finishJump() // idempotente
+    }
+
+    @Test
+    fun `viagem que falha nao toca a animacao`() {
+        val c = controller()
+        c.travel()
+        assertNull(c.jump)
+        c.game.credits = 0
+        val far = c.game.world.region.systems.maxByOrNull { c.game.world.region.distanceLy(c.game.location, it) }!!
+        c.selectSystem(far)
+        if (c.game.fuelCost(far) > c.game.fuel) { c.travel(); assertNull(c.jump) }
+    }
+
+    @Test
+    fun `a animacao muda a cada quadro e termina em clarao`() {
+        val j = Jump("A", "B", 3, 2)
+        fun frame(p: Float): ByteArray = Preview.png { HyperspaceScreen(j, p) }
+        val frames = listOf(0f, .25f, .5f, .75f).map(::frame)
+        for (i in frames.indices) for (k in i + 1 until frames.size) assertFalse(frames[i].contentEquals(frames[k]), "quadros $i e $k iguais")
+        // fim: tela quase toda branca
+        val img = javax.imageio.ImageIO.read(frame(1f).inputStream())
+        val c = img.getRGB(img.width / 2, img.height / 2)
+        assertTrue((c shr 16 and 255) > 240 && (c shr 8 and 255) > 240)
+        // início: fundo escuro (só estrelas e a nave)
+        val start = javax.imageio.ImageIO.read(frame(0f).inputStream())
+        assertTrue(start.getRGB(5, 5) and 0xFF < 40)
+        // sempre a mesma animação: o mesmo quadro duas vezes dá a mesma imagem
+        assertArrayEquals(frame(.4f), frame(.4f))
+    }
+
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+    @Test
+    fun `a raiz mostra a animacao, avanca com o relogio e depois libera a chegada`() {
+        val c = controller()
+        val scene = androidx.compose.ui.ImageComposeScene(720, 1480, androidx.compose.ui.unit.Density(2f)) { AppRoot(c) }
+        try {
+            var t = 0L
+            fun frame(ms: Long) { t += ms * 1_000_000L; scene.render(t) }
+            frame(16)
+            c.selectSystem(c.game.reachable().first()); c.travel()
+            assertNotNull(c.jump)
+            frame(16); frame(16)
+            assertNotNull(c.jump, "terminou cedo demais")
+            frame(1000); assertNotNull(c.jump)
+            frame(1000); assertNotNull(c.jump)
+            repeat(4) { frame(400) }
+            assertNull(c.jump, "a animação não terminou depois de ${HYPERSPACE_MS} ms")
+            assertEquals(Tab.ESTACAO, c.tab)
+            // pular com um toque
+            c.selectSystem(c.game.reachable().first()); c.travel()
+            frame(16); frame(16)
+            assertNotNull(c.jump)
+            scene.sendPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Press, androidx.compose.ui.geometry.Offset(300f, 600f)); frame(16)
+            scene.sendPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Release, androidx.compose.ui.geometry.Offset(300f, 600f)); frame(16)
+            assertNull(c.jump, "o toque não pulou a animação")
+        } finally { scene.close() }
+    }
+}

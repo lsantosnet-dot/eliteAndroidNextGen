@@ -19,7 +19,7 @@ core/   Kotlin/JVM puro, testável sem Android SDK
   story/     Storylet/StoryEngine (eventos com condições e lacunas), StoryContent (22 storylets), InnerVoice (voz interior)
   economy/   Commodity (12 mercadorias), Laws (ideologia → contrabando) e Market (preço/estoque por sistema e dia)
 app/    App Android (Activity + ViewModel que guarda o jogo; reaproveita o código de ui/ sem as classes só de PC). Só entra no build com Android SDK
-ui/     Interface Compose (dossiê noir): tema, telas (Mapa, Estação com mercado/dossiê/bar, Dossiê, Livro, Perseguição, Confronto, História, Relatório), GameController (estado e ações) e AppRoot (navegação); Preview renderiza PNGs sem janela
+ui/     Interface Compose (dossiê noir): tema, telas (Mapa, Estação com mercado/dossiê/bar, animação de hiperespaço no salto, Dossiê, Livro, Perseguição, Confronto, História, Relatório), GameController (estado e ações) e AppRoot (navegação); Preview renderiza PNGs sem janela
 docs/   Design e protótipo visual (docs/mercador)
 ```
 

@@ -131,6 +131,9 @@ object Preview {
         menu.openSlots(); menu.deleteSlot(id1)
         save("10-jogos.png") { AppRoot(menu) }
         dir.deleteRecursively()
+
+        // 11: o hiperespaço, no meio do salto
+        save("11-hiperespaco.png") { HyperspaceScreen(Jump("Zenqum", "Kote", 4, 3), .62f) }
         return files
     }
 }
