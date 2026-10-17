@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="740" viewBox="0 0 360 740" font-family="'Liberation Sans','DejaVu Sans',sans-serif">
+<defs>
+  <radialGradient id="gA"><stop offset="0" stop-color="#d9a441" stop-opacity=".38"/><stop offset="1" stop-color="#d9a441" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gR"><stop offset="0" stop-color="#c0392b" stop-opacity=".42"/><stop offset="1" stop-color="#c0392b" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gT"><stop offset="0" stop-color="#3fa7a0" stop-opacity=".36"/><stop offset="1" stop-color="#3fa7a0" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gV"><stop offset="0" stop-color="#8b6fc4" stop-opacity=".36"/><stop offset="1" stop-color="#8b6fc4" stop-opacity="0"/></radialGradient>
+  <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0H0V30" fill="none" stroke="#1c222a" stroke-width="1"/></pattern>
+</defs>
+<rect width="360" height="740" fill="#0b0d10"/>
+<!-- barra superior -->
+<rect width="360" height="64" fill="#10141a"/>
+<line x1="0" y1="64" x2="360" y2="64" stroke="#262d36"/>
+<text x="16" y="28" fill="#d8dde3" font-family="'DejaVu Serif',Georgia,serif" font-size="15" letter-spacing=".5">GALÁXIA 3F2A · SETOR 12</text>
+<text x="16" y="50" fill="#7c8793" font-size="11" font-family="'DejaVu Sans Mono',monospace">DIA 142 · ATENÇÃO  ▮▮▮▯▯</text>
+<text x="344" y="28" fill="#d9a441" font-size="14" text-anchor="end" font-family="'DejaVu Sans Mono',monospace">12 480 cr</text>
+<text x="344" y="50" fill="#7c8793" font-size="11" text-anchor="end" font-family="'DejaVu Sans Mono',monospace">COMB 5.2 / 7.0 LY</text>
+<!-- mapa -->
+<rect y="65" width="360" height="450" fill="url(#grid)"/>
+<ellipse cx="82" cy="170" rx="95" ry="75" fill="url(#gR)"/>
+<ellipse cx="270" cy="150" rx="90" ry="70" fill="url(#gA)"/>
+<ellipse cx="90" cy="400" rx="85" ry="70" fill="url(#gV)"/>
+<ellipse cx="275" cy="390" rx="95" ry="80" fill="url(#gT)"/>
+<!-- zona proibida -->
+<circle cx="180" cy="282" r="38" fill="none" stroke="#c0392b" stroke-width="1.2" stroke-dasharray="3 4"/>
+<text x="180" y="236" fill="#c0392b" font-size="9" text-anchor="middle" letter-spacing="1.5">ZONA INTERDITADA</text>
+<!-- rotas -->
+<g stroke="#3a444f" stroke-width="1" fill="none">
+  <path d="M60 140 L110 190 L160 160 L215 130 L285 135"/>
+  <path d="M110 190 L120 250 L95 330 L70 410"/>
+  <path d="M215 130 L240 215 L300 300 L260 380"/>
+  <path d="M95 330 L170 400 L260 380"/>
+  <path d="M70 410 L130 450 L170 400"/>
+  <path d="M260 380 L310 440"/>
+</g>
+<path d="M120 250 L95 330 L170 400" stroke="#d9a441" stroke-width="2" fill="none" stroke-dasharray="6 4"/>
+<!-- sistemas -->
+<g font-size="10" fill="#aeb6bf">
+  <circle cx="60" cy="140" r="3.5" fill="#c0392b"/><text x="68" y="136">Qube</text>
+  <circle cx="110" cy="190" r="4.5" fill="#c0392b"/><text x="118" y="186">Tibedied</text>
+  <circle cx="160" cy="160" r="3" fill="#6c7782"/><text x="167" y="156">Leleer</text>
+  <circle cx="215" cy="130" r="4.5" fill="#d9a441"/><text x="223" y="126">Biarge</text>
+  <circle cx="285" cy="135" r="3.5" fill="#d9a441"/><text x="292" y="131" text-anchor="start">Zaatxe</text>
+  <circle cx="240" cy="215" r="3" fill="#6c7782"/><text x="248" y="211">Rabedira</text>
+  <circle cx="120" cy="250" r="5" fill="#0b0d10" stroke="#d8dde3" stroke-width="2"/><text x="130" y="254" fill="#d8dde3">Lave</text>
+  <circle cx="95" cy="330" r="4" fill="#8b6fc4"/><text x="103" y="334">Xequerin</text>
+  <circle cx="300" cy="300" r="3.5" fill="#3fa7a0"/><text x="256" y="296">Tiraor</text>
+  <circle cx="260" cy="380" r="4.5" fill="#3fa7a0"/><text x="268" y="376">Diusreza</text>
+  <circle cx="170" cy="400" r="6" fill="#0b0d10" stroke="#d9a441" stroke-width="2"/><text x="180" y="418" fill="#d9a441" font-weight="bold">Ausis</text>
+  <circle cx="70" cy="410" r="3.5" fill="#8b6fc4"/><text x="78" y="428">Andiri</text>
+  <circle cx="130" cy="450" r="3" fill="#6c7782"/><text x="138" y="466">Maisso</text>
+  <circle cx="310" cy="440" r="3.5" fill="#3fa7a0"/><text x="316" y="456" text-anchor="end">Ladibe</text>
+</g>
+<!-- legenda de facções -->
+<g font-size="9" fill="#7c8793">
+  <circle cx="18" cy="82" r="4" fill="#c0392b"/><text x="27" y="85">Regime de Qube</text>
+  <circle cx="120" cy="82" r="4" fill="#d9a441"/><text x="129" y="85">Guilda Mercante</text>
+  <circle cx="228" cy="82" r="4" fill="#8b6fc4"/><text x="237" y="85">Sínodo</text>
+  <circle cx="283" cy="82" r="4" fill="#3fa7a0"/><text x="292" y="85">Cartel</text>
+</g>
+<!-- cartão do sistema -->
+<rect x="10" y="520" width="340" height="168" rx="8" fill="#12161c" stroke="#262d36"/>
+<rect x="10" y="520" width="4" height="168" rx="2" fill="#d9a441"/>
+<text x="26" y="544" fill="#d8dde3" font-family="'DejaVu Serif',Georgia,serif" font-size="18">Ausis</text>
+<text x="334" y="544" fill="#d9a441" font-size="10" text-anchor="end" letter-spacing="1">GUILDA MERCANTE</text>
+<text x="26" y="562" fill="#7c8793" font-size="10" font-family="'DejaVu Sans Mono',monospace">Multi-governo · Agrícola · TL 5 · 2.3 bi</text>
+<g font-size="9" fill="#7c8793" font-family="'DejaVu Sans Mono',monospace">
+  <text x="26" y="584">CONTROLE</text>
+  <rect x="100" y="577" width="120" height="6" rx="3" fill="#1c222a"/><rect x="100" y="577" width="48" height="6" rx="3" fill="#d9a441"/>
+  <text x="26" y="602">DESCONT.</text>
+  <rect x="100" y="595" width="120" height="6" rx="3" fill="#1c222a"/><rect x="100" y="595" width="92" height="6" rx="3" fill="#c0392b"/>
+  <text x="26" y="620">ABASTEC.</text>
+  <rect x="100" y="613" width="120" height="6" rx="3" fill="#1c222a"/><rect x="100" y="613" width="30" height="6" rx="3" fill="#3fa7a0"/>
+</g>
+<text x="236" y="584" fill="#aeb6bf" font-size="10">Salto: 2.1 LY</text>
+<text x="236" y="600" fill="#aeb6bf" font-size="10">Risco de rota: médio</text>
+<text x="236" y="616" fill="#c0392b" font-size="10">⚠ Rumor: bloqueio</text>
+<text x="26" y="642" fill="#aeb6bf" font-size="10" font-style="italic">“A fome é a única lei que ninguém discute.”</text>
+<rect x="24" y="652" width="312" height="26" rx="5" fill="#d9a441"/>
+<text x="180" y="669" fill="#0b0d10" font-size="12" text-anchor="middle" font-weight="bold" letter-spacing="1">PLANEJAR SALTO</text>
+<!-- navegação inferior -->
+<rect y="700" width="360" height="40" fill="#10141a"/>
+<line x1="0" y1="700" x2="360" y2="700" stroke="#262d36"/>
+<g font-size="10" fill="#7c8793" text-anchor="middle" letter-spacing="1">
+  <text x="45" y="724" fill="#d9a441">MAPA</text><text x="135" y="724">ESTAÇÃO</text><text x="225" y="724">DOSSIÊ</text><text x="315" y="724">LIVRO</text>
+</g>
+</svg>

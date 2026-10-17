@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="740" viewBox="0 0 360 740" font-family="'Liberation Sans','DejaVu Sans',sans-serif">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1410"/><stop offset="1" stop-color="#0b0d10"/></linearGradient>
+  <radialGradient id="sun"><stop offset="0" stop-color="#d9a441" stop-opacity=".55"/><stop offset="1" stop-color="#d9a441" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="360" height="740" fill="#0b0d10"/>
+<!-- cena ilustrada da estação -->
+<rect width="360" height="190" fill="url(#sky)"/>
+<circle cx="285" cy="70" r="70" fill="url(#sun)"/>
+<circle cx="285" cy="70" r="22" fill="#d9a441" opacity=".85"/>
+<g fill="#07090b" stroke="#2a313a" stroke-width="1">
+  <path d="M0 190 L0 120 L30 120 L30 95 L52 95 L52 130 L80 130 L80 80 L96 80 L96 60 L108 60 L108 140 L140 140 L140 110 L170 110 L170 150 L210 150 L210 100 L224 100 L224 70 L240 70 L240 160 L270 160 L270 125 L300 125 L300 145 L360 145 L360 190 Z"/>
+</g>
+<g fill="#d9a441" opacity=".7">
+  <rect x="36" y="101" width="3" height="3"/><rect x="44" y="110" width="3" height="3"/><rect x="86" y="90" width="3" height="3"/>
+  <rect x="98" y="75" width="2" height="3"/><rect x="180" y="125" width="3" height="3"/><rect x="214" y="115" width="3" height="3"/>
+  <rect x="230" y="90" width="2" height="3"/><rect x="278" y="140" width="3" height="3"/>
+</g>
+<rect y="170" width="360" height="20" fill="#0b0d10" opacity=".8"/>
+<text x="16" y="36" fill="#d8dde3" font-family="'DejaVu Serif',Georgia,serif" font-size="22">Estação Ausis-3</text>
+<text x="16" y="54" fill="#d9a441" font-size="10" letter-spacing="1.5">GUILDA MERCANTE · PORTO LIVRE</text>
+<text x="344" y="22" fill="#d9a441" font-size="13" text-anchor="end" font-family="'DejaVu Sans Mono',monospace">12 480 cr</text>
+<text x="344" y="38" fill="#7c8793" font-size="10" text-anchor="end" font-family="'DejaVu Sans Mono',monospace">DIA 143</text>
+<!-- abas -->
+<g font-size="11" letter-spacing="1">
+  <text x="22" y="209" fill="#d9a441">MERCADO</text><rect x="14" y="215" width="76" height="2" fill="#d9a441"/>
+  <text x="112" y="209" fill="#7c8793">DOSSIÊ</text>
+  <text x="180" y="209" fill="#7c8793">BAR</text>
+  <text x="226" y="209" fill="#7c8793">CONTRATOS</text>
+</g>
+<line x1="0" y1="217" x2="360" y2="217" stroke="#262d36"/>
+<!-- cabeçalho tabela -->
+<g font-size="9" fill="#7c8793" letter-spacing="1">
+  <text x="16" y="236">MERCADORIA</text><text x="176" y="236" text-anchor="end">PREÇO</text><text x="190" y="236">TENDÊNCIA</text><text x="344" y="236" text-anchor="end">ESTOQUE</text>
+</g>
+<!-- linhas -->
+<g font-size="12" fill="#d8dde3">
+  <rect x="10" y="244" width="340" height="40" rx="5" fill="#12161c"/>
+  <text x="20" y="262">Alimentos</text><text x="20" y="276" font-size="9" fill="#7c8793">essencial · escasso aqui</text>
+  <text x="176" y="268" text-anchor="end" font-family="'DejaVu Sans Mono',monospace" fill="#d9a441">38.4</text>
+  <text x="190" y="268" fill="#c0392b">▲ +22%</text>
+  <text x="338" y="268" text-anchor="end" font-family="'DejaVu Sans Mono',monospace">12 t</text>
+
+  <rect x="10" y="290" width="340" height="40" rx="5" fill="#12161c"/>
+  <text x="20" y="308">Medicamentos</text><text x="20" y="322" font-size="9" fill="#7c8793">essencial · racionado</text>
+  <text x="176" y="314" text-anchor="end" font-family="'DejaVu Sans Mono',monospace" fill="#d9a441">91.0</text>
+  <text x="190" y="314" fill="#c0392b">▲ +41%</text>
+  <text x="338" y="314" text-anchor="end" font-family="'DejaVu Sans Mono',monospace">3 t</text>
+
+  <rect x="10" y="336" width="340" height="40" rx="5" fill="#12161c"/>
+  <text x="20" y="354">Máquinas</text><text x="20" y="368" font-size="9" fill="#7c8793">industrial</text>
+  <text x="176" y="360" text-anchor="end" font-family="'DejaVu Sans Mono',monospace" fill="#d9a441">142.6</text>
+  <text x="190" y="360" fill="#3fa7a0">▼ −6%</text>
+  <text x="338" y="360" text-anchor="end" font-family="'DejaVu Sans Mono',monospace">40 t</text>
+
+  <rect x="10" y="382" width="340" height="40" rx="5" fill="#161014" stroke="#5a2a2a"/>
+  <text x="20" y="400">Armas leves</text>
+  <rect x="92" y="391" width="46" height="13" rx="3" fill="#3a1a1a"/><text x="115" y="401" font-size="8" text-anchor="middle" fill="#e07a6a" letter-spacing=".5">PROIBIDO</text>
+  <text x="20" y="414" font-size="9" fill="#a56a62">legal em Qube · lucro alto</text>
+  <text x="176" y="408" text-anchor="end" font-family="'DejaVu Sans Mono',monospace" fill="#d9a441">310.0</text>
+  <text x="190" y="408" fill="#aeb6bf">▬ 0%</text>
+  <text x="338" y="408" text-anchor="end" font-family="'DejaVu Sans Mono',monospace">—</text>
+
+  <rect x="10" y="428" width="340" height="40" rx="5" fill="#12161c"/>
+  <text x="20" y="446">Minérios raros</text><text x="20" y="460" font-size="9" fill="#7c8793">industrial</text>
+  <text x="176" y="454" text-anchor="end" font-family="'DejaVu Sans Mono',monospace" fill="#d9a441">205.5</text>
+  <text x="190" y="454" fill="#3fa7a0">▼ −11%</text>
+  <text x="338" y="454" text-anchor="end" font-family="'DejaVu Sans Mono',monospace">8 t</text>
+</g>
+<!-- carga -->
+<g>
+  <text x="16" y="494" fill="#7c8793" font-size="9" letter-spacing="1">PORÃO  14 / 20 t</text>
+  <rect x="16" y="502" width="328" height="10" rx="4" fill="#1c222a"/>
+  <rect x="16" y="502" width="120" height="10" rx="4" fill="#d9a441"/>
+  <rect x="136" y="502" width="38" height="10" fill="#8b6fc4"/>
+  <rect x="174" y="502" width="38" height="10" rx="4" fill="#c0392b"/>
+  <g font-size="9" fill="#aeb6bf"><text x="16" y="528">Máquinas 10 t</text><text x="136" y="528">Obras de arte 3 t</text><text x="258" y="528" fill="#e07a6a">Carga oculta 1 t</text></g>
+</g>
+<!-- nota do mercado -->
+<rect x="10" y="542" width="340" height="86" rx="8" fill="#12161c" stroke="#262d36"/>
+<text x="24" y="564" fill="#d9a441" font-size="10" letter-spacing="1.5">LIVRO DE CONTAS · ÚLTIMA LINHA</text>
+<text x="24" y="584" fill="#d8dde3" font-size="12" font-style="italic" font-family="'DejaVu Serif',Georgia,serif">Você entregou comida a Qube. A Guilda</text>
+<text x="24" y="600" fill="#d8dde3" font-size="12" font-style="italic" font-family="'DejaVu Serif',Georgia,serif">pagou bem. O Regime não esqueceu quem</text>
+<text x="24" y="616" fill="#d8dde3" font-size="12" font-style="italic" font-family="'DejaVu Serif',Georgia,serif">a levou até a fila do racionamento.</text>
+<!-- ações -->
+<rect x="16" y="644" width="152" height="34" rx="6" fill="#d9a441"/><text x="92" y="666" fill="#0b0d10" font-size="12" text-anchor="middle" font-weight="bold" letter-spacing="1">COMPRAR</text>
+<rect x="192" y="644" width="152" height="34" rx="6" fill="none" stroke="#d9a441"/><text x="268" y="666" fill="#d9a441" font-size="12" text-anchor="middle" font-weight="bold" letter-spacing="1">VENDER</text>
+<rect y="700" width="360" height="40" fill="#10141a"/><line x1="0" y1="700" x2="360" y2="700" stroke="#262d36"/>
+<g font-size="10" fill="#7c8793" text-anchor="middle" letter-spacing="1">
+  <text x="45" y="724">MAPA</text><text x="135" y="724" fill="#d9a441">ESTAÇÃO</text><text x="225" y="724">DOSSIÊ</text><text x="315" y="724">LIVRO</text>
+</g>
+</svg>
