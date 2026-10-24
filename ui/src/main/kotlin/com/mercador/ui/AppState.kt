@@ -162,7 +162,7 @@ class GameController(
         }
     }
 
-    fun acceptContract(k: Contract) = simple(game.acceptContract(k), "Contrato aceito: ${k.tons} t de ${k.cargoLabel} para ${k.destName} até o dia ${k.deadline}.")
+    fun acceptContract(k: Contract) = simple(game.acceptContract(k), "Contrato aceito: ${k.what} para ${k.destName} até o dia ${k.deadline}.")
     fun abandonContract(id: Long) = simple(game.abandonContract(id), "Contrato abandonado. O cliente vai lembrar.")
 
     fun deliverContract(id: Long) {

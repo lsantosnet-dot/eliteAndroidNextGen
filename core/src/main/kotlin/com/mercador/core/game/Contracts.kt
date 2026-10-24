@@ -3,6 +3,7 @@ package com.mercador.core.game
 import com.mercador.core.economy.Commodity
 import com.mercador.core.rng.Rng
 import com.mercador.core.rng.derive
+import com.mercador.core.universe.Faction
 import com.mercador.core.universe.StarSystem
 import com.mercador.core.universe.SystemId
 import kotlin.math.ceil
@@ -15,6 +16,11 @@ enum class ContractKind(val label: String) {
     LACRADA("Carga lacrada"),
     /** Leve o que falta a um sistema em crise; paga menos, mas encurta a crise e rende favor. */
     SOCORRO("Socorro"),
+    /**
+     * Uma carta lacrada de um governador para a facção rival (vem de uma história, não da estação): não ocupa o
+     * porão, paga na entrega e, se a alfândega achar numa revista ou o prazo vencer, o governador não perdoa.
+     */
+    CARTA("Carta lacrada"),
 }
 
 class Contract(
@@ -31,7 +37,13 @@ class Contract(
     val clientName: String,
 ) {
     /** O que o jogador vê: a carga lacrada nunca diz o que é. */
-    val cargoLabel: String get() = if (kind == ContractKind.LACRADA) "carga lacrada" else commodity.label.lowercase()
+    val cargoLabel: String get() = when (kind) {
+        ContractKind.LACRADA -> "carga lacrada"
+        ContractKind.CARTA -> "carta lacrada"
+        else -> commodity.label.lowercase()
+    }
+    /** O que se leva, para os textos: "5 t de comida", ou "uma carta lacrada". */
+    val what: String get() = if (kind == ContractKind.CARTA) "uma carta lacrada" else "$tons t de $cargoLabel"
     fun daysLeft(day: Int) = deadline - day
 }
 
@@ -89,6 +101,25 @@ object Contracts {
         val shady = People.generate(rng, client, "intermediário").name
         return Contract(id, ContractKind.LACRADA, c, tons, d.id, d.name, g.day + eta(g, d) + rng.range(2, 4), reward, client.id, shady)
     }
+
+    /**
+     * A carta do governador [governor] (facção [client]) para [rival]: entregue no sistema de [rival] mais perto
+     * daqui. Null se [rival] não governa nenhum sistema da região.
+     */
+    fun letter(g: Game, governor: String, client: Faction, rival: Faction): Contract? {
+        val w = g.world
+        val d = w.region.systems.filter { it !== g.location && w.controller(it).id == rival.id }
+            .minByOrNull { w.region.distanceLy(g.location, it) } ?: return null
+        val dist = w.region.distanceLy(g.location, d)
+        val id = derive(g.location.seedKey(), g.day.toLong(), 0xCA27A)
+        return Contract(id, ContractKind.CARTA, Commodity.LIVROS, 0, d.id, d.name, g.day + eta(g, d) + LETTER_SLACK_DAYS,
+            (LETTER_BASE + dist * 30).toInt(), client.id, governor)
+    }
+
+    const val LETTER_BASE = 250
+    const val LETTER_SLACK_DAYS = 6
+    /** Chance de a revista da patrulha achar a carta (o compartimento oculto a esconde sempre). */
+    const val LETTER_FOUND = 0.5
 
     /** Dias até o destino se fosse direto (o prazo dá folga em cima disso). */
     private fun eta(g: Game, d: StarSystem): Int = 1 + ceil(g.world.region.distanceLy(g.location, d) / 2).toInt()

@@ -1,6 +1,8 @@
 package com.mercador.core.story
 
 import com.mercador.core.economy.Commodity
+import com.mercador.core.game.Contract
+import com.mercador.core.game.Contracts
 import com.mercador.core.game.Game
 import com.mercador.core.game.Outcome
 import com.mercador.core.game.People
@@ -44,7 +46,7 @@ class StoryCard(val storylet: Storylet, val text: String, val trigger: Trigger, 
 class Ops(val g: Game, val rng: Rng) {
     val system = g.location
     val faction: Faction = g.faction
-    val rival: Faction = g.factions.factions.filter { it.id != faction.id }.minBy { g.factions.relation(faction.id, it.id) }
+    val rival: Faction = StoryEngine.rival(g)
 
     fun credits(n: Int) { g.credits = (g.credits + n).coerceAtLeast(0) }
     fun heat(n: Int) = g.standing.addHeat(faction, n)
@@ -69,12 +71,26 @@ class Ops(val g: Game, val rng: Rng) {
     fun meters(control: Int = 0, discontent: Int = 0, supply: Int = 0) = g.world.pushMeters(system, control, discontent, supply)
     fun voice(text: String) = g.addVoice(StoryEngine.fill(g, text, 0))
     fun ledger(text: String) = g.note(StoryEngine.fill(g, text, 0))
+    /** A carta do governador daqui para o [rival] vira contrato, aceito na hora; null se não há vaga ou destino ([canTakeLetter]). */
+    fun letter(): Contract? {
+        val k = Contracts.letter(g, StoryEngine.fill(g, "{governador}", 0), faction, rival) ?: return null
+        if (!g.addContract(k)) return null
+        ledger("Aceitou levar uma carta lacrada de {governador} para {rival}: entregar em ${k.destName} até o dia ${k.deadline}, ${k.reward} cr na entrega.")
+        return k
+    }
     fun scene(role: String) {
         g.startScene(People.generate(rng, faction, role), emptyMap(), retaliation = false)
     }
 }
 
+/** Há vaga para mais um contrato e o rival da facção local governa algum sistema para onde levar a carta. */
+fun Game.canTakeLetter(): Boolean = contracts.size < Contracts.MAX_ACTIVE &&
+    Contracts.letter(this, "", faction, StoryEngine.rival(this)) != null
+
 object StoryEngine {
+    /** A facção com a pior relação com quem manda aqui. */
+    fun rival(g: Game): Faction = g.factions.factions.filter { it.id != g.faction.id }.minBy { g.factions.relation(g.faction.id, it.id) }
+
     /** Chance de haver uma história em cada chegada. */
     const val CHANCE = 0.6
     const val COOLDOWN_DAYS = 25
@@ -111,7 +127,7 @@ object StoryEngine {
     fun fill(g: Game, template: String, seed: Long): String {
         val sys = g.location
         val faction = g.faction
-        val rival = g.factions.factions.filter { it.id != faction.id }.minBy { g.factions.relation(faction.id, it.id) }
+        val rival = rival(g)
         val governor = People.generate(Rng(derive(sys.seedKey(), 0x607)), faction, "governador").name
         return template
             .replace("{sistema}", sys.name)

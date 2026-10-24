@@ -214,23 +214,24 @@ private fun ContractsBody(game: Game, ui: StationUi) {
 
 @Composable
 private fun ContractCard(game: Game, k: Contract, active: Boolean, ui: StationUi) {
-    val sealed = k.kind == ContractKind.LACRADA
+    val sealed = k.kind == ContractKind.LACRADA || k.kind == ContractKind.CARTA
     val left = k.daysLeft(game.day)
     val dest = game.world.region.systems.firstOrNull { it.id == k.destination }
     val dist = dest?.let { "%.1f".format(game.world.region.distanceLy(game.location, it)) + " LY" } ?: ""
-    val kindColor = when (k.kind) { ContractKind.LACRADA -> Noir.salmon; ContractKind.SOCORRO -> Noir.teal; ContractKind.ENTREGA -> Noir.amber }
+    val kindColor = when (k.kind) { ContractKind.LACRADA, ContractKind.CARTA -> Noir.salmon; ContractKind.SOCORRO -> Noir.teal; ContractKind.ENTREGA -> Noir.amber }
     Card(Modifier.fillMaxWidth(), border = if (sealed) Noir.dangerLine else Noir.line, fill = if (sealed) Noir.dangerBg else Noir.panel) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             T(k.kind.label.uppercase(), 10f, kindColor, spacing = 1.5f, modifier = Modifier.weight(1f))
             T(credits(k.reward), 14f, Noir.amber, Noir.mono)
         }
         Spacer(Modifier.height(4.dp))
-        T("${k.tons} t de ${k.cargoLabel} para ${k.destName}", 14f, Noir.text, weight = FontWeight.Bold)
+        T("${k.what.replaceFirstChar { it.uppercase() }} para ${k.destName}", 14f, Noir.text, weight = FontWeight.Bold)
         T("$dist · ${if (active) "faltam $left dia(s)" else "prazo: dia ${k.deadline} ($left dias)"} · ${k.clientName}", 11f, if (active && left <= 3) Noir.salmon else Noir.muted, Noir.mono)
         val hint = when (k.kind) {
             ContractKind.ENTREGA -> if (active) "você tem ${game.ownTons(k.commodity)} t; compre o resto onde for barato" else "compre a carga você mesmo; o contrato paga mais que o mercado"
             ContractKind.SOCORRO -> "encurta a crise de lá e rende favor"
             ContractKind.LACRADA -> "sem perguntas: a carga vem agora, ocupa o porão e pode ser proibida no caminho"
+            ContractKind.CARTA -> "não ocupa o porão; atraque em ${k.destName} e entregue aqui. Numa revista, a alfândega pode achá-la"
         }
         T(hint, 11.5f, Noir.sub, Noir.serif, italic = true)
         Spacer(Modifier.height(8.dp))

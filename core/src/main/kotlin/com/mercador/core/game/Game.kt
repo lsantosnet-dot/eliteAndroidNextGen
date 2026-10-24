@@ -320,13 +320,29 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         val evidence = evidence()
         val p = encounterChance(location)
         if (Rng(derive(location.seedKey(), day.toLong(), 0xCA5E)).nextDouble() >= p) return Outcome.Ok(credits)
+        val letterFound = searchForLetter(f)
         if (evidence.isEmpty()) {
-            standing.addHeat(f, -10)
-            note("Revistado pela patrulha de ${f.name}: nada encontrado.")
+            if (!letterFound) {
+                standing.addHeat(f, -10)
+                note("Revistado pela patrulha de ${f.name}: nada encontrado.")
+            }
             return Outcome.Ok(credits)
         }
         pursuit = Pursuit(location, f, evidence)
         return Outcome.Pursued(pursuit!!)
+    }
+
+    /**
+     * Na revista, a alfândega pode achar a carta de um governador (o compartimento oculto a esconde). Achada,
+     * ela é apreendida, a atenção de [f] sobe e o contrato quebra com as consequências dele. Retorna se achou.
+     */
+    private fun searchForLetter(f: com.mercador.core.universe.Faction): Boolean {
+        val letter = _contracts.firstOrNull { it.kind == ContractKind.CARTA } ?: return false
+        if (hiddenCapacity > 0) return false
+        if (Rng(derive(location.seedKey(), day.toLong(), letter.id, 0x1E77)).nextDouble() >= Contracts.LETTER_FOUND) return false
+        standing.addHeat(f, 10)
+        failContract(letter, "A patrulha de ${f.name} revistou a nave em ${location.name} e apreendeu a carta lacrada de ${letter.clientName}.")
+        return true
     }
 
     fun responses(): List<Response> {
@@ -527,13 +543,23 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         }
         takenOffers += c.id
         _contracts += c
-        note("Aceitou ${c.kind.label.lowercase()}: ${c.tons} t de ${c.cargoLabel} para ${c.destName} até o dia ${c.deadline}, por ${c.reward} cr.")
+        note("Aceitou ${c.kind.label.lowercase()}: ${c.what} para ${c.destName} até o dia ${c.deadline}, por ${c.reward} cr.")
         return Outcome.Ok(credits)
     }
 
+    /** Um contrato que nasce fora da estação (a carta de uma história). False se já há contratos demais. */
+    internal fun addContract(c: Contract): Boolean {
+        if (_contracts.size >= Contracts.MAX_ACTIVE || _contracts.any { it.id == c.id }) return false
+        _contracts += c
+        return true
+    }
+
     /** O contrato pode ser entregue aqui e agora? */
-    fun canDeliver(c: Contract): Boolean = c.destination == location.id &&
-        (if (c.kind == ContractKind.LACRADA) (cargo[c.commodity] ?: 0) >= c.tons else ownTons(c.commodity) >= c.tons)
+    fun canDeliver(c: Contract): Boolean = c.destination == location.id && when (c.kind) {
+        ContractKind.CARTA -> true
+        ContractKind.LACRADA -> (cargo[c.commodity] ?: 0) >= c.tons
+        else -> ownTons(c.commodity) >= c.tons
+    }
 
     fun deliverContract(id: Long): Pair<Outcome, String?> {
         if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE) to null
@@ -564,8 +590,13 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
                 bump(Stat.LACRADAS_ENTREGUES)
                 revealSealed(c)
             }
+            ContractKind.CARTA -> {
+                grantFavor(client)
+                "Um funcionário de ${faction.name} recebe o envelope sem abrir, confere o lacre contra a luz e some por uma porta lateral. " +
+                    "Na volta, ${c.reward} cr e um recado: ${c.clientName} agradece e vai lembrar."
+            }
         }
-        note("Cumpriu o contrato com ${c.clientName}: ${c.tons} t de ${c.cargoLabel} em ${location.name}, ${c.reward} cr.")
+        note("Cumpriu o contrato com ${c.clientName}: ${c.what} em ${location.name}, ${c.reward} cr.")
         checkCampaign()
         return Outcome.Ok(credits) to text
     }
@@ -597,13 +628,22 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
             val left = (cargo[c.commodity] ?: 0) - c.tons
             if (left <= 0) cargo.remove(c.commodity) else cargo[c.commodity] = left
         }
-        standing.addReputation(factions.factions[c.client], if (c.kind == ContractKind.LACRADA) -10 else -5)
+        val client = factions.factions[c.client]
+        standing.addReputation(client, if (c.kind == ContractKind.LACRADA || c.kind == ContractKind.CARTA) -10 else -5)
         bump(Stat.CONTRATOS_FALHOS)
         note(why)
+        if (c.kind == ContractKind.CARTA) {
+            // o governador perde o favor que te deu e manda alguém acertar as contas
+            useFavor(client)
+            val rng = Rng(derive(location.seedKey(), day.toLong(), c.id, 0xCA27))
+            val emissary = People.generate(rng, client, "emissário de ${c.clientName}")
+            retaliations += Retaliation(day + rng.range(10, 25), emissary)
+            note("${c.clientName} soube da carta. ${emissary.name} vai aparecer.")
+        }
     }
 
     private fun expireContracts() {
-        for (c in _contracts.filter { it.deadline < day }) failContract(c, "O prazo do contrato com ${c.clientName} venceu: ${c.tons} t de ${c.cargoLabel} que não chegaram a ${c.destName}.")
+        for (c in _contracts.filter { it.deadline < day }) failContract(c, "O prazo do contrato com ${c.clientName} venceu: ${c.what} que não chegou a ${c.destName}.")
     }
 
     /** Carga lacrada confiscada, jogada fora ou perdida numa história quebra o contrato. */

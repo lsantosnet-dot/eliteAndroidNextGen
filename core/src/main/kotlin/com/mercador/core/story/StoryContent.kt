@@ -122,16 +122,18 @@ object StoryContent {
         Storylet("carta-do-governador", "A carta do governador", setOf(C), 12, { it.m().control >= 40 && it.location.traits.corruption >= 55 },
             "{governador}, governador de {sistema}, mostra um envelope lacrado. Quer que chegue a {rival}, sem que ninguém na alfândega saiba.",
             listOf(
-                Choice("Levar a carta e não perguntar", "+250 cr, favor", { true }) { o ->
-                    o.credits(250); o.favor(); o.heat(4)
-                    o.ledger("Aceitou levar uma carta lacrada de {governador} para {rival}.")
-                    "O envelope pesa menos do que devia. Ou mais."
+                Choice("Levar a carta e não perguntar", "vira contrato: pago na entrega, num sistema de {rival}", { it.canTakeLetter() }) { o ->
+                    val k = o.letter() ?: return@Choice "{governador} olha a sua lista de contratos e guarda o envelope. Fica para outra vez."
+                    o.favor(); o.heat(4)
+                    "O envelope pesa menos do que devia. Ou mais. Tem que estar em ${k.destName} até o dia ${k.deadline}; " +
+                        "o pagamento, ${k.reward} cr, sai na entrega. Na aba Contratos ela aparece como carta lacrada."
                 },
-                Choice("Abrir a carta antes", "obtém um segredo; perde a confiança", { true }) { o ->
+                Choice("Abrir a carta antes", "obtém um segredo; perde a confiança; ainda tem que entregá-la", { it.canTakeLetter() }) { o ->
+                    val k = o.letter() ?: return@Choice "{governador} percebe a sua intenção e guarda o envelope antes que você o toque."
                     o.secret(); o.rep(-8)
                     o.ledger("Abriu a carta de {governador} antes de entregá-la.")
                     o.voice("Saber é uma forma de dívida.")
-                    "Nomes, valores, uma data. Agora você carrega algo mais perigoso que a própria carta."
+                    "Nomes, valores, uma data. Agora você carrega algo mais perigoso que a própria carta, e ela ainda tem que estar em ${k.destName} até o dia ${k.deadline}."
                 },
                 Choice("Recusar", "") { o -> o.rep(-2); "{governador} guarda o envelope sem mudar de expressão." },
             )),

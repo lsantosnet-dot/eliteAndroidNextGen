@@ -39,7 +39,10 @@ Um jogo novo começa com uma **dívida de 24 000 cr** com um agiota e prazo no d
 livro de contas, e o jogo segue em modo livre.
 
 - **Contratos** (aba da estação, até 3 ao mesmo tempo): entregas com prazo que pagam mais que o mercado, **socorro** a
-  sistemas em crise e **carga lacrada** "sem perguntas", que ocupa o porão e só no fim revela o que era.
+  sistemas em crise e **carga lacrada** "sem perguntas", que ocupa o porão e só no fim revela o que era. A **carta
+  lacrada** vem de uma história (um governador corrupto escreve ao rival): vira contrato para o sistema do rival mais
+  perto, não ocupa o porão e paga na entrega; numa revista a alfândega pode achá-la (o compartimento oculto a esconde),
+  e carta apreendida ou fora do prazo custa o favor e manda um emissário do governador atrás de você.
 - **Estaleiro**: porão (até 50 t), tanque, motor de salto; no mercado negro (corrupção alta), compartimento oculto e
   transponder falso. Cada melhoria só se vende em certos sistemas.
 - **Mapa útil**: o cartão do sistema mostra quanto a sua carga renderia lá (pelos preços que você viu ou comprou no
