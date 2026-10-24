@@ -135,7 +135,7 @@ fun ReportScreen(report: Report, onContinue: () -> Unit = {}) {
 
 /** Dossiê do mercador: estado, tanque, atenção por facção, favores e segredos. */
 @Composable
-fun DossierScreen(game: Game, notice: String?, onTab: (Tab) -> Unit = {}, onRefuel: () -> Unit = {}, onLoan: () -> Unit = {}, onFreight: () -> Unit = {}, onRepay: () -> Unit = {}, onSlots: () -> Unit = {}) {
+fun DossierScreen(game: Game, notice: String?, onTab: (Tab) -> Unit = {}, onRefuel: () -> Unit = {}, onLoan: () -> Unit = {}, onFreight: () -> Unit = {}, onRepay: () -> Unit = {}, onSlots: () -> Unit = {}, onPayCreditor: () -> Unit = {}) {
     Column(Modifier.fillMaxSize().background(Noir.bg)) {
         Column(Modifier.fillMaxWidth().background(Noir.panel).padding(16.dp)) {
             T("DOSSIÊ", 22f, Noir.text, Noir.serif, spacing = 2f)
@@ -147,16 +147,28 @@ fun DossierScreen(game: Game, notice: String?, onTab: (Tab) -> Unit = {}, onRefu
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row { T("Créditos", 13f, Noir.sub, modifier = Modifier.weight(1f)); T(credits(game.credits), 14f, Noir.amber, Noir.mono) }
                 if (game.debt > 0) Row { T("Dívida", 13f, Noir.sub, modifier = Modifier.weight(1f)); T(credits(game.debt), 14f, Noir.red, Noir.mono) }
-                Row { T("Combustível", 13f, Noir.sub, modifier = Modifier.weight(1f)); T("${game.fuel} / ${Game.FUEL_CAPACITY}", 14f, Noir.text, Noir.mono) }
-                Row { T("Porão", 13f, Noir.sub, modifier = Modifier.weight(1f)); T("${game.holdUsed} / ${Game.HOLD_CAPACITY} t", 14f, Noir.text, Noir.mono) }
+                Row { T("Combustível", 13f, Noir.sub, modifier = Modifier.weight(1f)); T("${game.fuel} / ${game.fuelCapacity}", 14f, Noir.text, Noir.mono) }
+                Row { T("Porão", 13f, Noir.sub, modifier = Modifier.weight(1f)); T("${game.holdUsed} / ${game.holdCapacity} t", 14f, Noir.text, Noir.mono) }
+            }
+            game.campaign?.let { c -> CampaignCard(game, c, onPayCreditor) }
+            val installed = Upgrade.values().filter { game.level(it) > 0 }
+            Column {
+                Label("A nave"); Spacer(Modifier.height(6.dp))
+                if (installed.isEmpty()) T("De fábrica. O estaleiro da estação vende melhorias.", 12.5f, Noir.sub, Noir.serif, italic = true)
+                for (u in installed) Row { T(u.label, 13f, Noir.text, modifier = Modifier.weight(1f)); T("nível ${game.level(u)} / ${u.maxLevel}", 12f, Noir.muted, Noir.mono) }
             }
             Column {
                 Label("No porão"); Spacer(Modifier.height(6.dp))
                 if (game.cargo.isEmpty()) T("Vazio.", 12.5f, Noir.sub, Noir.serif, italic = true)
-                for ((c, t) in game.cargo) Row {
-                    T(c.label + if (game.isIllegalHere(c)) "  · proibido aqui" else "", 13f, if (game.isIllegalHere(c)) Noir.salmon else Noir.text, modifier = Modifier.weight(1f))
-                    T("$t t", 13f, Noir.text, Noir.mono)
+                for (c in game.cargo.keys) {
+                    val t = game.ownTons(c)
+                    if (t <= 0) continue
+                    Row {
+                        T(c.label + if (game.isIllegalHere(c)) "  · proibido aqui" else "", 13f, if (game.isIllegalHere(c)) Noir.salmon else Noir.text, modifier = Modifier.weight(1f))
+                        T("$t t", 13f, Noir.text, Noir.mono)
+                    }
                 }
+                if (game.sealedTons > 0) Row { T("Carga lacrada (contrato)", 13f, Noir.salmon, modifier = Modifier.weight(1f)); T("${game.sealedTons} t", 13f, Noir.text, Noir.mono) }
             }
             Column {
                 Label("Atenção, favores e segredos"); Spacer(Modifier.height(8.dp))
@@ -172,7 +184,7 @@ fun DossierScreen(game: Game, notice: String?, onTab: (Tab) -> Unit = {}, onRefu
             }
             if (notice != null) T(notice, 12f, Noir.salmon, italic = true)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlineButton("Reabastecer (${credits((Game.FUEL_CAPACITY - game.fuel) * Game.FUEL_PRICE)})", Modifier.fillMaxWidth(), Noir.amber, onRefuel)
+                OutlineButton("Reabastecer (${credits((game.fuelCapacity - game.fuel) * Game.FUEL_PRICE)})", Modifier.fillMaxWidth(), Noir.amber, onRefuel)
                 if (game.debt > 0) OutlineButton("Pagar dívida", Modifier.fillMaxWidth(), Noir.teal, onRepay)
                 OutlineButton("Pedir empréstimo de socorro", Modifier.fillMaxWidth(), Noir.sub, onLoan)
                 OutlineButton("Pegar frete miúdo (5 dias)", Modifier.fillMaxWidth(), Noir.sub, onFreight)
@@ -180,5 +192,52 @@ fun DossierScreen(game: Game, notice: String?, onTab: (Tab) -> Unit = {}, onRefu
             }
         }
         BottomNav(Tab.DOSSIE, onSelect = onTab)
+    }
+}
+
+/** A dívida da campanha: quanto falta, o próximo marco e o botão de pagar. */
+@Composable
+private fun CampaignCard(game: Game, c: Campaign, onPay: () -> Unit) {
+    val color = if (c.over) Noir.teal else Noir.red
+    Card(Modifier.fillMaxWidth(), border = color.copy(alpha = .6f)) {
+        Label("Dívida com ${c.creditor.name}", color)
+        Spacer(Modifier.height(2.dp))
+        T("${c.creditor.role} de ${c.creditor.faction.name}", 11f, Noir.faction(c.creditor.faction))
+        Spacer(Modifier.height(8.dp))
+        Bar(c.paid / c.total.toFloat(), color, Modifier.fillMaxWidth(), 8)
+        Spacer(Modifier.height(4.dp))
+        Row { T("pago ${credits(c.paid)}", 11f, Noir.muted, Noir.mono, modifier = Modifier.weight(1f)); T("total ${credits(c.total)}", 11f, Noir.muted, Noir.mono) }
+        Spacer(Modifier.height(6.dp))
+        when {
+            c.outcome == CampaignOutcome.QUITADA -> T("Quitada. O seu nome é seu de novo.", 12.5f, Noir.teal, Noir.serif, italic = true)
+            c.outcome == CampaignOutcome.CALOTE -> T("Calote. O prazo venceu e ${c.creditor.name} não esquece.", 12.5f, Noir.salmon, Noir.serif, italic = true)
+            else -> {
+                c.next()?.let { (day, due) ->
+                    val left = day - game.day
+                    T(if (due > 0) "Próxima parcela: ${credits(due)} até o dia $day ($left dias)" else "Parcela do dia $day já coberta.",
+                        12.5f, if (due > 0 && left <= 15) Noir.salmon else Noir.text)
+                }
+                T("Prazo final: dia ${c.deadline}" + if (c.missed > 0) " · ${c.missed} parcela(s) perdida(s)" else "", 11f, Noir.muted, Noir.mono)
+                Spacer(Modifier.height(8.dp))
+                OutlineButton("Pagar ao agiota (${credits(minOf(game.credits, c.remaining))})", Modifier.fillMaxWidth(), Noir.red, onPay)
+            }
+        }
+    }
+}
+
+/** Fim da campanha: o livro de contas lido em voz alta. */
+@Composable
+fun EpilogueScreen(e: Epilogue, onContinue: () -> Unit = {}) {
+    Column(Modifier.fillMaxSize().background(Noir.bg).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 28.dp)) {
+        Label("Epílogo", Noir.amber)
+        Spacer(Modifier.height(8.dp))
+        T(e.title, 34f, Noir.text, Noir.serif)
+        Spacer(Modifier.height(18.dp))
+        for (p in e.paragraphs) {
+            T(p, 15f, Noir.text, Noir.serif, lineHeight = 22f)
+            Spacer(Modifier.height(12.dp))
+        }
+        Spacer(Modifier.height(12.dp))
+        PrimaryButton("Seguir em modo livre", Modifier.fillMaxWidth(), onContinue)
     }
 }

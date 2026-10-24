@@ -10,7 +10,7 @@ import com.mercador.core.game.SaveSlots
 import com.mercador.core.universe.StarSystem
 import com.mercador.core.world.Side
 
-enum class StationTab(val label: String) { MERCADO("Mercado"), SISTEMA("Dossiê"), BAR("Bar") }
+enum class StationTab(val label: String) { MERCADO("Mercado"), CONTRATOS("Contratos"), ESTALEIRO("Estaleiro"), SISTEMA("Dossiê"), BAR("Bar") }
 
 /** Mensagem de desfecho mostrada em tela cheia (resultado de uma decisão) até o jogador continuar. */
 class Report(val kicker: String, val text: String)
@@ -140,6 +140,26 @@ class GameController(
         }
     }
 
+    fun acceptContract(k: Contract) = simple(game.acceptContract(k), "Contrato aceito: ${k.tons} t de ${k.cargoLabel} para ${k.destName} até o dia ${k.deadline}.")
+    fun abandonContract(id: Long) = simple(game.abandonContract(id), "Contrato abandonado. O cliente vai lembrar.")
+
+    fun deliverContract(id: Long) {
+        val (o, text) = game.deliverContract(id)
+        if (o is Outcome.Fail) fail(describe(o.reason)) else { report = Report("Contrato cumprido", text ?: ""); touch() }
+    }
+
+    fun buyUpgrade(u: Upgrade) = simple(game.buyUpgrade(u), "${u.label} instalado (nível ${game.level(u)}).")
+
+    fun payCreditor() {
+        val o = game.payCreditor()
+        if (o is Outcome.Fail) return fail(describe(o.reason))
+        val c = game.campaign!!
+        notice = if (c.remaining == 0) "Dívida quitada." else "Pagou ao agiota. Faltam ${credits(c.remaining)}."
+        touch()
+    }
+
+    fun dismissEpilogue() { game.dismissEpilogue(); touch() }
+
     fun refuel() = simple(game.refuel(), "Tanque cheio.")
     fun takeLoan() = simple(game.takeLoan(), "Empréstimo concedido. A dívida cresce.")
     fun haulFreight() = simple(game.haulFreight(), "Frete cumprido: cinco dias a mais e algumas moedas.")
@@ -154,13 +174,14 @@ class GameController(
         val from = game.location
         val ly = game.fuelCost(to)
         val days = game.travelDays(to)
+        val newsBefore = game.news.size
         when (val o = game.travel(to)) {
             is Outcome.Fail -> fail(describe(o.reason))
             else -> {
                 // Saltou: a animação sempre toca antes de a chegada (estação, perseguição ou história) aparecer.
                 jump = Jump(from.name, to.name, ly, days)
                 selectedSystem = null; tab = Tab.ESTACAO; stationTab = StationTab.MERCADO
-                if (o is Outcome.Ok) notice = "Chegou a ${to.name}."
+                if (o is Outcome.Ok) notice = "Chegou a ${to.name}." + (game.news.drop(newsBefore).lastOrNull()?.let { " Jornal: ${it.text}" } ?: "")
                 touch()
             }
         }
@@ -213,6 +234,12 @@ class GameController(
             Failure.SEM_DIVIDA -> "Você não deve nada."
             Failure.NAO_ELEGIVEL -> "Você ainda tem como se virar sozinho."
             Failure.SEM_BAR -> "Não há bar aqui."
+            Failure.SEM_CONTRATO -> "Esse contrato não está mais disponível."
+            Failure.LIMITE_DE_CONTRATOS -> "Você já tem ${Contracts.MAX_ACTIVE} contratos em aberto."
+            Failure.CONTRATO_EM_OUTRO_LUGAR -> "A entrega é em outro sistema."
+            Failure.SEM_ESTALEIRO -> "Esta estação não vende isso."
+            Failure.NIVEL_MAXIMO -> "Já está no nível máximo."
+            Failure.SEM_CAMPANHA -> "Não há dívida a pagar."
         }
     }
 }

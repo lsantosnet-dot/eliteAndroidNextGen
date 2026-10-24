@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,7 +32,7 @@ fun LedgerScreen(game: Game, voice: String, onTab: (Tab) -> Unit = {}) {
             T("o que você fez · não pode ser apagado", 12f, Noir.muted, Noir.mono)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Noir.line))
-        Column(Modifier.weight(1f).padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp)) {
             Label("Quem você está se tornando")
             Spacer(Modifier.height(10.dp))
             TraitChips(game)
@@ -72,7 +74,16 @@ fun LedgerScreen(game: Game, voice: String, onTab: (Tab) -> Unit = {}) {
                     T("chegada prevista: dia ~$due", 10.5f, Color(0xFFA56A62), Noir.mono, align = TextAlign.End, modifier = Modifier.fillMaxWidth())
                 }
             }
-            Spacer(Modifier.weight(1f))
+            if (game.news.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                Label("Jornal da região", Noir.amber)
+                Spacer(Modifier.height(4.dp))
+                for (n in game.news.takeLast(4).reversed()) Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    T("DIA ${n.day} · ${n.systemName.uppercase()}", 10.5f, Noir.muted, Noir.mono)
+                    T(n.text, 12.5f, if (n.text.startsWith("Revolta")) Noir.salmon else Noir.text, Noir.serif, lineHeight = 17f)
+                }
+            }
+            Spacer(Modifier.height(14.dp))
             OutlineButton("Ver todas as entradas (${game.ledger.size})", Modifier.fillMaxWidth(), Noir.sub)
         }
         BottomNav(Tab.LIVRO, onSelect = onTab)

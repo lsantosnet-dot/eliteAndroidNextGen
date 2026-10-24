@@ -208,14 +208,14 @@ object StoryContent {
                 },
             )),
 
-        Storylet("sacerdote", "O sacerdote", setOf(C), 8, { it.location.traits.ideology == Ideology.RELIGIOSA },
+        Storylet("sacerdote", "O sacerdote", setOf(C), 8, { it.ideology == Ideology.RELIGIOSA },
             "Um sacerdote de {facção} abençoa as naves que atracam em {sistema}. Pede uma oferta para a sua.",
             listOf(
                 Choice("Oferecer 50 cr", "+reputação", { it.credits >= 50 }) { o -> o.credits(-50); o.rep(4); "A bênção é breve e sincera." },
                 Choice("Recusar", "") { o -> o.rep(-1); "Ele ainda murmura algo, mesmo assim." },
             )),
 
-        Storylet("sociedade-duvidosa", "Sociedade duvidosa", setOf(C), 9, { it.location.traits.ideology == Ideology.MERCANTIL && it.credits >= 1200 },
+        Storylet("sociedade-duvidosa", "Sociedade duvidosa", setOf(C), 9, { it.ideology == Ideology.MERCANTIL && it.credits >= 1200 },
             "A Guilda oferece uma cota num carregamento. A tinta do contrato ainda está úmida. Pede 500 cr.",
             listOf(
                 Choice("Entrar por 500 cr", "pode render 800 ou nada", { it.credits >= 500 }) { o ->
@@ -239,7 +239,7 @@ object StoryContent {
             "Alguém em {sistema} oferece 4 t de um bem que {facção} proíbe, a preço de queima.",
             listOf(
                 Choice("Comprar", "atenção sobe", { it.holdFree >= 4 }) { o ->
-                    val banned = Commodity.values().filter { it.bannedBy(o.system.traits.ideology) }
+                    val banned = Commodity.values().filter { it.bannedBy(o.g.ideology) }
                     val c = banned[o.rng.nextInt(banned.size)]
                     val price = (c.basePrice * 4 * 0.6).toInt()
                     if (o.g.credits >= price) {
@@ -280,5 +280,5 @@ object StoryContent {
             )),
     )
 
-    val all: List<Storylet> = lote1 + StoryContentLote2.all + StoryContentLote3.all
+    val all: List<Storylet> = lote1 + StoryContentLote2.all + StoryContentLote3.all + StoryContentLote4.all
 }

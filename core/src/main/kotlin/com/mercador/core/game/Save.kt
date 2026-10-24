@@ -17,6 +17,17 @@ import java.io.File
 @Serializable data class PersonSave(val name: String, val role: String, val faction: Int)
 @Serializable data class RetaliationSave(val due: Int, val avenger: PersonSave)
 @Serializable data class TraitSave(val trait: String, val until: Int? = null)
+@Serializable data class SysCountSave(val system: SysRef, val value: Int)
+@Serializable data class CrisisSave(val kind: String, val system: SysRef, val systemName: String, val start: Int, val end: Int, val need: Int)
+@Serializable data class ContractSave(
+    val id: Long, val kind: String, val commodity: String, val tons: Int, val destination: SysRef, val destName: String,
+    val deadline: Int, val reward: Int, val client: Int, val clientName: String,
+)
+@Serializable data class KnownSave(val system: SysRef, val day: Int, val sell: List<Int>)
+@Serializable data class CampaignSave(
+    val creditor: PersonSave, val total: Int, val paid: Int, val deadline: Int, val checked: Int, val missed: Int,
+    val outcome: String? = null, val epilogueSeen: Boolean = false,
+)
 
 @Serializable
 data class GameSave(
@@ -49,6 +60,20 @@ data class GameSave(
     val name: String = "",
     val savedAt: Long = 0,
     val locationName: String = "",
+    // Mundo vivo, nave, contratos e campanha. Todos com padrão: saves antigos continuam legíveis (modo livre, mundo parado).
+    val living: Boolean = false,
+    val controllers: List<SysCountSave> = emptyList(),
+    val unrestDays: List<SysCountSave> = emptyList(),
+    val lastRevolt: List<SysCountSave> = emptyList(),
+    val crises: List<CrisisSave> = emptyList(),
+    val upgrades: Map<String, Int> = emptyMap(),
+    val contracts: List<ContractSave> = emptyList(),
+    val takenOffers: List<Long> = emptyList(),
+    val avgCost: Map<String, Int> = emptyMap(),
+    val known: List<KnownSave> = emptyList(),
+    val news: List<LedgerSave> = emptyList(),
+    val stats: Map<String, Int> = emptyMap(),
+    val campaign: CampaignSave? = null,
 ) {
     companion object { const val VERSION = 1 }
 }

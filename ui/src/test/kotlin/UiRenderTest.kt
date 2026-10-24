@@ -9,7 +9,8 @@ class UiRenderTest {
     fun `as telas renderizam sem janela e nao saem em branco`() {
         val dir = File(System.getProperty("java.io.tmpdir"), "mercador-ui-test").also { it.deleteRecursively() }
         val files = Preview.renderAll(dir)
-        assertEquals(listOf("01-mapa.png", "02-estacao.png", "05-perseguicao.png", "03-confronto.png", "04-livro.png", "06-historia.png", "07-relatorio.png", "08-dossie.png", "09-bar.png", "10-jogos.png", "11-hiperespaco.png"), files.map { it.name })
+        assertEquals(listOf("01-mapa.png", "02-estacao.png", "05-perseguicao.png", "03-confronto.png", "04-livro.png", "06-historia.png", "07-relatorio.png", "08-dossie.png", "09-bar.png", "10-jogos.png", "11-hiperespaco.png",
+            "12-mapa-vivo.png", "13-contratos.png", "14-estaleiro.png", "15-divida.png", "16-epilogo.png"), files.map { it.name })
         for (f in files) {
             val img = ImageIO.read(f)
             assertEquals(720, img.width); assertEquals(1480, img.height)

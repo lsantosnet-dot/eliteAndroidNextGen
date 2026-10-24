@@ -8,10 +8,10 @@ import com.mercador.core.universe.Universe
 import com.mercador.core.world.World
 import kotlin.random.Random
 
-/** Um jogo novo num universo próprio (semente sorteada), no sistema inicial da região. */
+/** Um jogo novo num universo próprio (semente sorteada), no sistema inicial da região: mundo vivo e a dívida da campanha. */
 fun freshGame(seed: Long = Random.nextLong()): Game {
-    val world = World(Region.around(Universe(seed)))
-    return Game(world, world.region.systems[0])
+    val world = World(Region.around(Universe(seed)), living = true)
+    return Game(world, world.region.systems[0], campaign = true)
 }
 
 /** O jogo aberto na partida do app: de qual slot veio e um aviso, se algo deu errado ao abrir. */

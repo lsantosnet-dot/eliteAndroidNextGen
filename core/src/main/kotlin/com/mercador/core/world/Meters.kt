@@ -5,6 +5,7 @@ import com.mercador.core.rng.Rng
 import com.mercador.core.rng.derive
 import com.mercador.core.universe.Ideology
 import com.mercador.core.universe.SystemTraits
+import kotlin.math.roundToInt
 
 /** Os três medidores de um sistema (seção 5 do design), de 0 a 100. */
 data class Meters(val control: Int, val discontent: Int, val supply: Int) {
@@ -14,9 +15,18 @@ data class Meters(val control: Int, val discontent: Int, val supply: Int) {
     /** Racionamento: abastecimento tão baixo que as entregas de bens essenciais pesam no livro. */
     val rationing: Boolean get() = supply < RATIONING_THRESHOLD
 
+    /**
+     * Pressão de revolta: descontentamento, somado ao quanto o poder afrouxou o controle. Armas seguram um regime;
+     * livros, panfletos e fome o derrubam. Dias seguidos acima de [REVOLT_PRESSURE] viram revolta (mundo vivo).
+     */
+    val pressure: Int get() = (discontent + (50 - control) * 0.4).roundToInt().coerceIn(0, 100)
+    val revolting: Boolean get() = pressure >= REVOLT_PRESSURE
+    val nearRevolt: Boolean get() = pressure >= REVOLT_PRESSURE - 8
+
     companion object {
         const val UNREST_THRESHOLD = 90
         const val RATIONING_THRESHOLD = 35
+        const val REVOLT_PRESSURE = 72
     }
 }
 
@@ -51,7 +61,7 @@ object MeterModel {
         Commodity.ARMAS -> Push(control = 4.0, discontent = 1.0, supply = 2.0)
         Commodity.DROGAS -> Push(control = -2.0, discontent = 1.0)
         Commodity.LUXO -> Push(control = 1.0, discontent = 2.0)
-        Commodity.LIVROS -> Push(control = -2.0, discontent = 2.0)
+        Commodity.LIVROS -> Push(control = -4.0, discontent = 3.0)
         Commodity.MAQUINAS, Commodity.ELETRONICOS, Commodity.MINERIO -> Push(supply = 1.0)
         Commodity.RELIQUIAS -> Push()
     }

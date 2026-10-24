@@ -9,15 +9,24 @@ import com.mercador.core.universe.Doctrine
 import com.mercador.core.universe.StarSystem
 import com.mercador.core.world.MeterModel
 import com.mercador.core.world.Side
+import com.mercador.core.world.NewsKind
 import com.mercador.core.world.World
+import com.mercador.core.world.WorldNews
 import java.util.EnumMap
 import kotlin.math.ceil
 
 /** Uma linha do livro de contas: o registro permanente do que o jogador fez (seção 5). */
 data class LedgerEntry(val day: Int, val systemName: String, val text: String)
 
+/** Preços de venda (por ordinal de [Commodity]) que o jogador viu num sistema, e quando. */
+class KnownMarket(val day: Int, val sell: List<Int>)
+
+/** Estimativa de venda da carga num destino: receita, lucro sobre o custo, toneladas proibidas lá e contratos a receber. */
+class SaleEstimate(val revenue: Int, val profit: Int, val bannedTons: Int, val contractPay: Int, val seenDay: Int)
+
 enum class Failure {
-    SEM_DINHEIRO, SEM_PORAO, SEM_ESTOQUE, SEM_CARGA, SEM_COMBUSTIVEL, FORA_DE_ALCANCE, QUANTIDADE_INVALIDA, TANQUE_CHEIO, PERSEGUICAO_PENDENTE, SEM_PERSEGUICAO, RESPOSTA_INDISPONIVEL, SEM_DIVIDA, NAO_ELEGIVEL, SEM_CENA, POSTURA_INDISPONIVEL, SEM_HISTORIA, ESCOLHA_INDISPONIVEL, SEM_BAR
+    SEM_DINHEIRO, SEM_PORAO, SEM_ESTOQUE, SEM_CARGA, SEM_COMBUSTIVEL, FORA_DE_ALCANCE, QUANTIDADE_INVALIDA, TANQUE_CHEIO, PERSEGUICAO_PENDENTE, SEM_PERSEGUICAO, RESPOSTA_INDISPONIVEL, SEM_DIVIDA, NAO_ELEGIVEL, SEM_CENA, POSTURA_INDISPONIVEL, SEM_HISTORIA, ESCOLHA_INDISPONIVEL, SEM_BAR,
+    SEM_CONTRATO, LIMITE_DE_CONTRATOS, CONTRATO_EM_OUTRO_LUGAR, SEM_ESTALEIRO, NIVEL_MAXIMO, SEM_CAMPANHA
 }
 
 sealed interface Outcome {
@@ -34,11 +43,37 @@ sealed interface Outcome {
     data class SceneEnded(val scene: Confrontation, val ending: Ending, val text: String) : Outcome
 }
 
-/** Estado do mercador solitário e o laço comprar → viajar → vender. */
-class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS, val stories: Boolean = true) {
+/**
+ * Estado do mercador solitário e o laço comprar → viajar → vender.
+ * Com [campaign], o jogo começa com a dívida da campanha (ver [Campaign]); sem ela, é modo livre.
+ */
+class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS, val stories: Boolean = true, campaign: Boolean = false) {
     var location: StarSystem = start
         private set
+    private val upgrades: MutableMap<Upgrade, Int> = EnumMap(Upgrade::class.java)
+    fun level(u: Upgrade) = upgrades[u] ?: 0
+    val holdCapacity: Int get() = HOLD_CAPACITY + level(Upgrade.PORAO) * HOLD_STEP
+    val fuelCapacity: Int get() = FUEL_CAPACITY + level(Upgrade.TANQUE) * FUEL_STEP
+    /** Toneladas de contrabando que o compartimento oculto esconde da revista. */
+    val hiddenCapacity: Int get() = level(Upgrade.COMPARTIMENTO) * HIDDEN_STEP
     var fuel: Int = FUEL_CAPACITY
+        private set
+    /** Contratos aceitos e ainda em aberto. */
+    private val _contracts = ArrayList<Contract>()
+    val contracts: List<Contract> get() = _contracts
+    /** Ofertas já aceitas (para não reaparecerem na mesma estação e período). */
+    private val takenOffers = HashSet<Long>()
+    /** Custo médio por tonelada do que está no porão (para estimar lucro no mapa). */
+    private val avgCost: MutableMap<Commodity, Int> = EnumMap(Commodity::class.java)
+    /** Preços de venda que o jogador viu em cada sistema (atracando ou por rumor) e em que dia. */
+    private val known = HashMap<com.mercador.core.universe.SystemId, KnownMarket>()
+    private val _news = ArrayList<LedgerEntry>()
+    /** Jornal da região: crises e revoltas, aconteçam ou não por causa do jogador. */
+    val news: List<LedgerEntry> get() = _news
+    private val stats: MutableMap<Stat, Int> = EnumMap(Stat::class.java)
+    fun stat(s: Stat) = stats[s] ?: 0
+    private fun bump(s: Stat, n: Int = 1) { stats[s] = stat(s) + n }
+    var campaign: Campaign? = null
         private set
     val cargo: MutableMap<Commodity, Int> = EnumMap(Commodity::class.java)
     val factions = world.region.universe.factions(world.region.galaxy)
@@ -69,13 +104,21 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
     private val _ledger = ArrayList<LedgerEntry>()
     val ledger: List<LedgerEntry> get() = _ledger
 
+    init {
+        remember(start)
+        if (campaign) startCampaign(Rng(derive(start.seedKey(), world.region.universe.seed, 0xDEB7)))
+    }
+
     val day: Int get() = world.day
-    val faction get() = location.faction
+    /** Quem governa onde o jogador está (pode ter mudado numa revolta). */
+    val faction get() = world.controller(location)
+    val ideology get() = world.ideology(location)
     fun hasTrait(t: Trait) = t in traitExpiry
     fun favors(f: com.mercador.core.universe.Faction) = favors[f.id]
     fun secretsAbout(f: com.mercador.core.universe.Faction) = secrets.count { it == f.id }
     fun grantFavor(f: com.mercador.core.universe.Faction) { favors[f.id] = (favors[f.id] + 1).coerceAtMost(3) }
     fun grantSecret(f: com.mercador.core.universe.Faction) { secrets += f.id }
+    internal fun useFavor(f: com.mercador.core.universe.Faction) { favors[f.id] = (favors[f.id] - 1).coerceAtLeast(0) }
     fun hasFame() = traitExpiry.keys.any { it.feared }
     fun pendingRetaliations() = retaliations.size
 
@@ -87,12 +130,28 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
 
     /** Dias restantes de um traço que se dissipa; null se permanente ou ausente. */
     fun traitDaysLeft(t: Trait): Int? = traitExpiry[t]?.let { (it - day).coerceAtLeast(0) }
-    fun isIllegalHere(c: Commodity) = c.bannedBy(location.traits.ideology)
+    fun isIllegalHere(c: Commodity) = world.banned(location, c)
     val holdUsed: Int get() = cargo.values.sum()
-    val holdFree: Int get() = HOLD_CAPACITY - holdUsed
+    val holdFree: Int get() = holdCapacity - holdUsed
+
+    /** Toneladas de [c] presas a contratos de carga lacrada (não podem ser vendidas). */
+    fun lockedTons(c: Commodity): Int = _contracts.filter { it.kind == ContractKind.LACRADA && it.commodity == c }.sumOf { it.tons }
+    /** Carga do jogador sem a lacrada: o que ele pode vender. */
+    fun ownTons(c: Commodity): Int = ((cargo[c] ?: 0) - lockedTons(c)).coerceAtLeast(0)
+    val sealedTons: Int get() = _contracts.filter { it.kind == ContractKind.LACRADA }.sumOf { it.tons }
 
     fun fuelCost(to: StarSystem): Int = ceil(world.region.distanceLy(location, to)).toInt().coerceAtLeast(1)
-    fun travelDays(to: StarSystem): Int = 1 + ceil(world.region.distanceLy(location, to) / 2).toInt()
+    fun travelDays(to: StarSystem): Int {
+        val base = 1 + ceil(world.region.distanceLy(location, to) / 2).toInt()
+        return ceil(base * (1 - level(Upgrade.MOTOR) * MOTOR_STEP_PCT / 100.0)).toInt().coerceAtLeast(1)
+    }
+
+    /** Chance de a patrulha abordar ao chegar em [s] com a carga de agora (o mapa, o bar e a chegada usam a mesma). */
+    fun encounterChance(s: StarSystem): Double {
+        val f = world.controller(s)
+        val p = PursuitRules.encounterChance(standing.heat(f), s.traits.surveillance, evidenceAt(s).isNotEmpty(), standing.isRestricted(f))
+        return if (level(Upgrade.TRANSPONDER) > 0) p * (1 - TRANSPONDER_CUT_PCT / 100.0) else p
+    }
 
     /** Destinos que o combustível atual alcança. */
     fun reachable(): List<StarSystem> =
@@ -106,6 +165,8 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         val cost = world.unitPrice(location, c, tons.toDouble(), Side.BUY) * tons
         if (cost > credits) return Outcome.Fail(Failure.SEM_DINHEIRO)
         credits -= cost
+        val own = ownTons(c)
+        avgCost[c] = ((avgCost[c] ?: 0).toLong() * own + cost).div(own + tons).toInt()
         cargo[c] = (cargo[c] ?: 0) + tons
         world.recordTrade(location, c, tons, Side.BUY)
         heatFromIllegalTrade(c, tons)
@@ -116,24 +177,25 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
         if (tons <= 0) return Outcome.Fail(Failure.QUANTIDADE_INVALIDA)
         val have = cargo[c] ?: 0
-        if (tons > have) return Outcome.Fail(Failure.SEM_CARGA)
+        if (tons > ownTons(c)) return Outcome.Fail(Failure.SEM_CARGA)
         val before = world.meters(location)
         credits += world.unitPrice(location, c, tons.toDouble(), Side.SELL) * tons
         if (have == tons) cargo.remove(c) else cargo[c] = have - tons
         world.recordTrade(location, c, tons, Side.SELL)
         recordConsequence(c, tons, before)
         heatFromIllegalTrade(c, tons)
+        relieveCrisis(c, tons)
         return Outcome.Ok(credits)
     }
 
     fun refuel(): Outcome {
         if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
-        val missing = FUEL_CAPACITY - fuel
+        val missing = fuelCapacity - fuel
         if (missing == 0) return Outcome.Fail(Failure.TANQUE_CHEIO)
         val cost = missing * FUEL_PRICE
         if (cost > credits) return Outcome.Fail(Failure.SEM_DINHEIRO)
         credits -= cost
-        fuel = FUEL_CAPACITY
+        fuel = fuelCapacity
         return Outcome.Ok(credits)
     }
 
@@ -141,14 +203,13 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
         if (to === location || to !in world.region.systems) return Outcome.Fail(Failure.FORA_DE_ALCANCE)
         val cost = fuelCost(to)
-        if (cost > FUEL_CAPACITY) return Outcome.Fail(Failure.FORA_DE_ALCANCE)
+        if (cost > fuelCapacity) return Outcome.Fail(Failure.FORA_DE_ALCANCE)
         if (cost > fuel) return Outcome.Fail(Failure.SEM_COMBUSTIVEL)
         fuel -= cost
         val days = travelDays(to)
-        world.advance(days)
-        standing.cool(days)
-        expireTraits()
+        elapse(days)
         location = to
+        remember(location)
         val arrived = arrive()
         if (!stories || arrived !is Outcome.Ok) return arrived
         val card = StoryEngine.draw(this) ?: return arrived
@@ -163,11 +224,23 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         if (index !in card.choices.indices || !card.choices[index].available) return Outcome.Fail(Failure.ESCOLHA_INDISPONIVEL)
         pendingStory = null
         val text = StoryEngine.resolve(this, card, index)
+        checkSealed()
         return Outcome.StoryResolved(text, confrontation)
     }
 
-    /** Provas que a lei do sistema atual enxerga no porão. */
-    fun evidence(): Map<Commodity, Int> = cargo.filter { (c, _) -> isIllegalHere(c) }
+    /** Provas que a lei do sistema atual enxerga no porão (o compartimento oculto esconde parte). */
+    fun evidence(): Map<Commodity, Int> = evidenceAt(location)
+
+    /** Provas que a lei de [s] enxergaria: o compartimento esconde primeiro o contrabando mais caro. */
+    fun evidenceAt(s: StarSystem): Map<Commodity, Int> {
+        var hide = hiddenCapacity
+        val out = EnumMap<Commodity, Int>(Commodity::class.java)
+        for ((c, t) in cargo.entries.filter { world.banned(s, it.key) }.sortedByDescending { it.key.basePrice }) {
+            val h = minOf(hide, t); hide -= h
+            if (t - h > 0) out[c] = t - h
+        }
+        return out
+    }
 
     /**
      * Ao chegar: o sorteio é função do sistema e do dia (determinístico e testável).
@@ -182,7 +255,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         val restricted = standing.isRestricted(f)
         if (restricted) standing.addHeat(f, 10)
         val evidence = evidence()
-        val p = PursuitRules.encounterChance(standing.heat(f), location.traits.surveillance, evidence.isNotEmpty(), restricted)
+        val p = encounterChance(location)
         if (Rng(derive(location.seedKey(), day.toLong(), 0xCA5E)).nextDouble() >= p) return Outcome.Ok(credits)
         if (evidence.isEmpty()) {
             standing.addHeat(f, -10)
@@ -243,12 +316,13 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
                 fuel -= PursuitRules.FLEE_FUEL
                 if (roll < PursuitRules.fleeChance(p)) {
                     standing.addHeat(f, 15); standing.addReputation(f, -3)
-                    val refuge = world.region.systems.filter { it.faction.id != f.id }
+                    val refuge = world.region.systems.filter { world.controller(it).id != f.id }
                         .minByOrNull { world.region.distanceLy(location, it) } ?: location
-                    world.advance(1); standing.cool(1)
+                    elapse(1)
                     location = refuge
+                    remember(location)
                     note("Fugiu da patrulha de ${f.name} e se refugiou em ${refuge.name}.")
-                    Resolution(r, true, 0, 0, "Escapou para ${refuge.name}, em território de ${refuge.faction.name}.")
+                    Resolution(r, true, 0, 0, "Escapou para ${refuge.name}, em território de ${world.controller(refuge).name}.")
                 } else {
                     standing.addHeat(f, 15)
                     caught(p, r, "A fuga falhou.")
@@ -269,6 +343,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
             }
         }
         pursuit = null
+        checkSealed()
         return Outcome.Resolved(res)
     }
 
@@ -288,9 +363,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
         if (credits >= FREIGHT_THRESHOLD || holdUsed > 0) return Outcome.Fail(Failure.NAO_ELEGIVEL)
         credits += FREIGHT_PAY
-        world.advance(FREIGHT_DAYS)
-        standing.cool(FREIGHT_DAYS)
-        expireTraits()
+        elapse(FREIGHT_DAYS)
         note("Carregou frete miúdo por $FREIGHT_DAYS dias para pagar o combustível.")
         return Outcome.Ok(credits)
     }
@@ -309,12 +382,268 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
 
     internal fun removeTrait(t: Trait) { traitExpiry.remove(t) }
 
-    internal fun adjustFuel(d: Int) { fuel = (fuel + d).coerceIn(0, FUEL_CAPACITY) }
+    internal fun adjustFuel(d: Int) { fuel = (fuel + d).coerceIn(0, fuelCapacity) }
 
     internal fun addVoice(text: String) { _voice += LedgerEntry(day, location.name, text) }
 
     /** Passa tempo fora de uma viagem: esfria a atenção e dissipa traços. */
-    internal fun passDays(n: Int) { world.advance(n); standing.cool(n); expireTraits() }
+    internal fun passDays(n: Int) = elapse(n)
+
+    /**
+     * Todo passar do tempo vem por aqui: o mundo anda, a atenção esfria, traços se dissipam, as notícias do
+     * mundo vivo entram no jornal, contratos vencem e os marcos da campanha são cobrados.
+     */
+    private fun elapse(n: Int) {
+        world.advance(n)
+        standing.cool(n)
+        expireTraits()
+        for (w in world.drainNews()) onNews(w)
+        expireContracts()
+        checkCampaign()
+    }
+
+    private fun onNews(w: WorldNews) {
+        _news += LedgerEntry(w.day, w.systemName, w.text)
+        if (w.kind == NewsKind.REVOLTA && _ledger.any { it.systemName == w.systemName && it.text.contains("última gota") && it.day >= w.day - 30 }) {
+            bump(Stat.REVOLTAS_PROVOCADAS)
+            note("A revolta em ${w.systemName} começou com um carregamento seu.")
+        }
+    }
+
+    /** Coloca o jogador em [s] sem viajar (testes e ferramentas de depuração; o jogo nunca chama). */
+    internal fun teleport(s: StarSystem) { location = s; remember(s) }
+
+    private fun remember(s: StarSystem) {
+        known[s.id] = KnownMarket(day, Commodity.values().map { world.unitPrice(s, it, 1.0, Side.SELL) })
+    }
+
+    /** Preços de venda vistos em [s] (atual, se o jogador está lá); null se nunca viu. */
+    fun knownMarket(s: StarSystem): KnownMarket? =
+        if (s === location) KnownMarket(day, Commodity.values().map { world.unitPrice(s, it, 1.0, Side.SELL) }) else known[s.id]
+
+    /**
+     * Quanto renderia vender a carga própria em [s], pelos preços que o jogador conhece de lá, e o lucro
+     * sobre o custo médio. Mercadoria proibida lá fica de fora (e é contada à parte). Null se nunca viu os preços.
+     */
+    fun estimateSale(s: StarSystem): SaleEstimate? {
+        val k = knownMarket(s) ?: return null
+        var revenue = 0; var cost = 0; var banned = 0
+        for (c in cargo.keys) {
+            val t = ownTons(c)
+            if (t <= 0) continue
+            if (world.banned(s, c)) { banned += t; continue }
+            revenue += k.sell[c.ordinal] * t
+            cost += (avgCost[c] ?: 0) * t
+        }
+        val pay = _contracts.filter { it.destination == s.id }.sumOf { it.reward }
+        return SaleEstimate(revenue, revenue - cost, banned, pay, k.day)
+    }
+
+    /** Melhor compra daqui para vender em [s] pelos preços conhecidos de lá: mercadoria e ganho por tonelada. */
+    fun bestRun(s: StarSystem): Pair<Commodity, Int>? {
+        val k = knownMarket(s) ?: return null
+        if (s === location) return null
+        return Commodity.values().filter { !isIllegalHere(it) && !world.banned(s, it) && world.quote(location, it).stock > 0 }
+            .map { it to k.sell[it.ordinal] - world.unitPrice(location, it, 1.0, Side.BUY) }
+            .filter { it.second > 0 }.maxByOrNull { it.second }
+    }
+
+    // ---- contratos ----
+
+    internal fun contractTaken(id: Long) = id in takenOffers
+
+    fun offers(): List<Contract> = Contracts.offers(this)
+
+    fun acceptContract(c: Contract): Outcome {
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        if (_contracts.size >= Contracts.MAX_ACTIVE) return Outcome.Fail(Failure.LIMITE_DE_CONTRATOS)
+        if (c.id in takenOffers || offers().none { it.id == c.id }) return Outcome.Fail(Failure.SEM_CONTRATO)
+        if (c.kind == ContractKind.LACRADA) {
+            if (c.tons > holdFree) return Outcome.Fail(Failure.SEM_PORAO)
+            cargo[c.commodity] = (cargo[c.commodity] ?: 0) + c.tons
+        }
+        takenOffers += c.id
+        _contracts += c
+        note("Aceitou ${c.kind.label.lowercase()}: ${c.tons} t de ${c.cargoLabel} para ${c.destName} até o dia ${c.deadline}, por ${c.reward} cr.")
+        return Outcome.Ok(credits)
+    }
+
+    /** O contrato pode ser entregue aqui e agora? */
+    fun canDeliver(c: Contract): Boolean = c.destination == location.id &&
+        (if (c.kind == ContractKind.LACRADA) (cargo[c.commodity] ?: 0) >= c.tons else ownTons(c.commodity) >= c.tons)
+
+    fun deliverContract(id: Long): Pair<Outcome, String?> {
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE) to null
+        val c = _contracts.firstOrNull { it.id == id } ?: return Outcome.Fail(Failure.SEM_CONTRATO) to null
+        if (c.destination != location.id) return Outcome.Fail(Failure.CONTRATO_EM_OUTRO_LUGAR) to null
+        if (!canDeliver(c)) return Outcome.Fail(Failure.SEM_CARGA) to null
+        _contracts.remove(c)
+        val left = (cargo[c.commodity] ?: 0) - c.tons
+        if (left <= 0) cargo.remove(c.commodity) else cargo[c.commodity] = left
+        credits += c.reward
+        val client = factions.factions[c.client]
+        standing.addReputation(client, 4)
+        bump(Stat.CONTRATOS_CUMPRIDOS)
+        val text = when (c.kind) {
+            ContractKind.ENTREGA -> {
+                world.recordTrade(location, c.commodity, c.tons, Side.SELL)
+                "Entregue. ${c.clientName} manda os ${c.reward} cr sem atraso."
+            }
+            ContractKind.SOCORRO -> {
+                val before = world.meters(location)
+                world.recordTrade(location, c.commodity, c.tons, Side.SELL)
+                recordConsequence(c.commodity, c.tons, before)
+                standing.addReputation(faction, 3)
+                relieveCrisis(c.commodity, c.tons)
+                "As caixas descem e somem na fila antes de você assinar o recibo. ${c.reward} cr, e gente que vai lembrar."
+            }
+            ContractKind.LACRADA -> {
+                bump(Stat.LACRADAS_ENTREGUES)
+                revealSealed(c)
+            }
+        }
+        note("Cumpriu o contrato com ${c.clientName}: ${c.tons} t de ${c.cargoLabel} em ${location.name}, ${c.reward} cr.")
+        checkCampaign()
+        return Outcome.Ok(credits) to text
+    }
+
+    /** No fim da carga lacrada, a verdade: o que era e o que fez no destino. */
+    private fun revealSealed(c: Contract): String {
+        val (line, pushC, pushD) = when (c.commodity) {
+            Commodity.ARMAS -> Triple("Eram armas. Em ${location.name}, alguém vai usá-las para manter outro alguém quieto.", 8, 2)
+            Commodity.DROGAS -> Triple("Era droga, pura. ${location.name} vai dormir melhor esta semana, e acordar pior.", -3, 4)
+            Commodity.LIVROS -> Triple("Eram livros e panfletos. Em ${location.name}, o poder vai descobrir de onde vieram.", -5, 5)
+            else -> Triple("Eram relíquias saqueadas de algum templo que já não existe.", 0, 1)
+        }
+        world.pushMeters(location, pushC, pushD, 0)
+        note(line)
+        return "${c.clientName} paga ${c.reward} cr e abre uma caixa na sua frente. $line"
+    }
+
+    fun abandonContract(id: Long): Outcome {
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        val c = _contracts.firstOrNull { it.id == id } ?: return Outcome.Fail(Failure.SEM_CONTRATO)
+        failContract(c, "Desistiu do contrato com ${c.clientName}.")
+        return Outcome.Ok(credits)
+    }
+
+    private fun failContract(c: Contract, why: String) {
+        _contracts.remove(c)
+        if (c.kind == ContractKind.LACRADA) {
+            // o cliente manda buscar o que sobrou da carga dele
+            val left = (cargo[c.commodity] ?: 0) - c.tons
+            if (left <= 0) cargo.remove(c.commodity) else cargo[c.commodity] = left
+        }
+        standing.addReputation(factions.factions[c.client], if (c.kind == ContractKind.LACRADA) -10 else -5)
+        bump(Stat.CONTRATOS_FALHOS)
+        note(why)
+    }
+
+    private fun expireContracts() {
+        for (c in _contracts.filter { it.deadline < day }) failContract(c, "O prazo do contrato com ${c.clientName} venceu: ${c.tons} t de ${c.cargoLabel} que não chegaram a ${c.destName}.")
+    }
+
+    /** Carga lacrada confiscada, jogada fora ou perdida numa história quebra o contrato. */
+    private fun checkSealed() {
+        val byGood = _contracts.filter { it.kind == ContractKind.LACRADA }.groupBy { it.commodity }
+        for ((good, list) in byGood) {
+            var have = cargo[good] ?: 0
+            for (c in list) {
+                if (have >= c.tons) { have -= c.tons; continue }
+                _contracts.remove(c)
+                standing.addReputation(factions.factions[c.client], -10)
+                bump(Stat.CONTRATOS_FALHOS)
+                note("A carga lacrada de ${c.clientName} se perdeu. Quem a mandou não vai esquecer.")
+            }
+        }
+    }
+
+    private fun relieveCrisis(c: Commodity, tons: Int) {
+        val cr = world.relieve(location, c, tons) ?: return
+        bump(Stat.CRISES_SOCORRIDAS)
+        standing.addReputation(faction, 6)
+        grantFavor(faction)
+        note("${cr.kind.label} em ${location.name} acabou com a sua entrega. ${faction.name} fica te devendo.")
+        for (w in world.drainNews()) onNews(w)
+    }
+
+    // ---- estaleiro ----
+
+    /** Melhorias à venda aqui (e o preço do próximo nível de cada). */
+    fun shipyard(): List<Pair<Upgrade, Int?>> = Upgrade.values().filter { it.soldAt(location) }.map { it to it.priceFor(level(it)) }
+
+    fun buyUpgrade(u: Upgrade): Outcome {
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        if (!u.soldAt(location)) return Outcome.Fail(Failure.SEM_ESTALEIRO)
+        val price = u.priceFor(level(u)) ?: return Outcome.Fail(Failure.NIVEL_MAXIMO)
+        if (price > credits) return Outcome.Fail(Failure.SEM_DINHEIRO)
+        credits -= price
+        upgrades[u] = level(u) + 1
+        bump(Stat.MELHORIAS)
+        note("Instalou ${u.label.lowercase()} (nível ${level(u)}) por $price cr.")
+        return Outcome.Ok(credits)
+    }
+
+    // ---- campanha ----
+
+    private fun startCampaign(rng: Rng) {
+        val fs = factions.factions
+        val f = fs.firstOrNull { it.doctrine == Doctrine.COBRADORA } ?: rng.pick(fs)
+        val creditor = People.generate(rng, f, "agiota")
+        campaign = Campaign(creditor, Campaign.DEBT)
+        note("Você deve ${Campaign.DEBT} cr a ${creditor.name}, agiota de ${f.name}. Prazo: dia ${Campaign.DEADLINE}. Ele cobra em parcelas.")
+    }
+
+    /** Paga ao agiota tudo o que der (ou [amount], se menor). */
+    fun payCreditor(amount: Int = Int.MAX_VALUE): Outcome {
+        val c = campaign ?: return Outcome.Fail(Failure.SEM_CAMPANHA)
+        if (c.over) return Outcome.Fail(Failure.SEM_CAMPANHA)
+        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
+        val pay = minOf(amount, credits, c.remaining)
+        if (pay <= 0) return Outcome.Fail(Failure.SEM_DINHEIRO)
+        credits -= pay; c.paid += pay
+        note("Pagou $pay cr a ${c.creditor.name}. Faltam ${c.remaining}.")
+        if (c.remaining == 0) {
+            c.outcome = CampaignOutcome.QUITADA
+            note("Quitou a dívida com ${c.creditor.name}.")
+        }
+        return Outcome.Ok(credits)
+    }
+
+    /** Confere os marcos vencidos: parcela perdida engorda a dívida e manda um cobrador. */
+    private fun checkCampaign() {
+        val c = campaign ?: return
+        while (!c.over && c.checked < Campaign.MILESTONE_AT.size && day >= c.milestone(c.checked).first) {
+            val (_, share) = c.milestone(c.checked)
+            val due = Math.ceil(c.total * share).toInt()
+            val last = c.checked == Campaign.MILESTONE_AT.size - 1
+            c.checked++
+            if (c.paid >= due) { if (!last) note("${c.creditor.name} recebeu a parcela. Por enquanto, silêncio."); continue }
+            c.missed++
+            if (last) {
+                c.outcome = CampaignOutcome.CALOTE
+                standing.addReputation(c.creditor.faction, -30)
+                note("O prazo de ${c.creditor.name} venceu e a dívida não foi paga.")
+                continue
+            }
+            val fine = (c.remaining * Campaign.PENALTY).toInt()
+            c.total += fine
+            val agent = People.generate(Rng(derive(location.seedKey(), day.toLong(), 0xC0B)), c.creditor.faction, "cobrador de ${c.creditor.name}")
+            retaliations += Retaliation(day, agent)
+            note("Perdeu a parcela de ${c.creditor.name}: a dívida cresceu $fine cr e ${agent.name} vem cobrar pessoalmente.")
+        }
+    }
+
+    /** Melhoria dada por uma história (sem passar pelo estaleiro). */
+    internal fun grantUpgrade(u: Upgrade) { if (level(u) < u.maxLevel) upgrades[u] = level(u) + 1 }
+
+    /** Muda o total da dívida da campanha (histórias de agiota); nunca abaixo do que já foi pago. */
+    internal fun adjustDebt(n: Int) { campaign?.takeIf { !it.over }?.let { it.total = maxOf(it.paid, it.total + n) } }
+
+    /** O epílogo da campanha, enquanto o jogador ainda não o leu. */
+    fun epilogue(): Epilogue? = campaign?.takeIf { it.over && !it.epilogueSeen }?.let { Epilogues.compose(this) }
+
+    fun dismissEpilogue() { campaign?.epilogueSeen = true }
 
     internal fun lastSeen(id: String): Int? = storySeen[id]
 
@@ -345,22 +674,21 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         credits -= offer.price
         val text = when (offer.kind) {
             RumorKind.ONDE_VENDER -> Bar.bestSale(this)?.let { (c, d) ->
-                "No bar dizem que o mercado de ${c.label.lowercase()} paga bem em ${d.name}."
+                remember(d)
+                "No bar dizem que o mercado de ${c.label.lowercase()} paga bem em ${d.name}. Os preços de lá vão para o seu mapa."
             } ?: "Ninguém sabe de nada que valha o salto agora."
             RumorKind.RISCO_DA_ROTA -> {
-                val d = reachable().maxByOrNull { standing.heat(it.faction) + it.traits.surveillance }
+                val d = reachable().maxByOrNull { standing.heat(world.controller(it)) + it.traits.surveillance }
                 if (d == null) "Sem combustível, a rota não importa." else {
-                    val p = PursuitRules.encounterChance(standing.heat(d.faction), d.traits.surveillance, evidenceFor(d).isNotEmpty(), standing.isRestricted(d.faction))
-                    "Em ${d.name}, a patrulha de ${d.faction.name} te abordaria com ${(p * 100).toInt()}% de chance."
+                    "Em ${d.name}, a patrulha de ${world.controller(d).name} te abordaria com ${(encounterChance(d) * 100).toInt()}% de chance."
                 }
             }
+            RumorKind.CRISE -> Bar.crisisRumor(this)
             RumorKind.SEGREDO -> { grantSecret(offer.about!!); "Você sai do bar sabendo algo sobre ${offer.about.name} que não devia." }
         }
         note("Pagou ${offer.price} cr por informação no bar.")
         return Outcome.Ok(credits) to text
     }
-
-    private fun evidenceFor(d: StarSystem) = cargo.filter { (c, _) -> c.bannedBy(d.traits.ideology) }
 
     /** Posturas disponíveis agora (seção 8.2). */
     fun postures(): List<Posture> {
@@ -389,8 +717,8 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
             else -> {}
         }
         s.step(posture, hasFame())
-        val ending = s.ending ?: return Outcome.Confronting(s)
-        return finish(s, ending)
+        val ending = s.ending ?: return Outcome.Confronting(s).also { checkSealed() }
+        return finish(s, ending).also { checkSealed() }
     }
 
     private fun dropHalfEvidence(s: Confrontation) {
@@ -475,14 +803,16 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
     private fun recordConsequence(c: Commodity, tons: Int, before: com.mercador.core.world.Meters) {
         val name = location.name
         if (c in MeterModel.essential && before.rationing && tons >= 5) {
+            bump(Stat.ENTREGAS_RACIONAMENTO)
             note("Entregou $tons t de ${c.label} durante o racionamento.")
             standing.addReputation(faction, Math.max(1, tons / 5))
             if (tons >= 10) grantFavor(faction)
         }
         if (c == Commodity.ARMAS && tons >= 5 && before.discontent >= 60) {
+            bump(Stat.ARMAS_A_TIRANOS)
             note("Vendeu $tons t de armas a um poder que o povo já não suporta.")
         }
-        if (!before.unrest && world.meters(location).unrest) {
+        if (!before.nearRevolt && world.meters(location).nearRevolt) {
             note("Seu carregamento de ${c.label} foi a última gota: o sistema está à beira da revolta.")
         }
     }
@@ -495,6 +825,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
     /** Foto do mundo vivido (ver [GameSave]). Decisões pendentes ficam de fora. */
     fun toSave(): GameSave {
         val (deltas, vols) = world.exportDeltas()
+        val living = world.exportLiving()
         fun ref(s: StarSystem) = SysRef(s.id.sx, s.id.sy, s.id.index)
         fun ref(id: com.mercador.core.universe.SystemId) = SysRef(id.sx, id.sy, id.index)
         return GameSave(
@@ -515,6 +846,21 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
             sceneWins = sceneWins, intimidationWins = intimidationWins,
             storySeen = storySeen.toSortedMap(),
             locationName = location.name,
+            living = world.living,
+            controllers = living.controllers.entries.sortedWith(compareBy({ it.key.sx }, { it.key.sy }, { it.key.index })).map { SysCountSave(ref(it.key), it.value) },
+            unrestDays = living.unrestDays.entries.sortedWith(compareBy({ it.key.sx }, { it.key.sy }, { it.key.index })).map { SysCountSave(ref(it.key), it.value) },
+            lastRevolt = living.lastRevolt.entries.sortedWith(compareBy({ it.key.sx }, { it.key.sy }, { it.key.index })).map { SysCountSave(ref(it.key), it.value) },
+            crises = living.crises.map { CrisisSave(it.kind.name, ref(it.system), it.systemName, it.start, it.end, it.need) },
+            upgrades = upgrades.entries.sortedBy { it.key.ordinal }.associate { it.key.name to it.value },
+            contracts = _contracts.map { ContractSave(it.id, it.kind.name, it.commodity.name, it.tons, ref(it.destination), it.destName, it.deadline, it.reward, it.client, it.clientName) },
+            takenOffers = takenOffers.sorted(),
+            avgCost = avgCost.entries.sortedBy { it.key.ordinal }.associate { it.key.name to it.value },
+            known = known.entries.sortedWith(compareBy({ it.key.sx }, { it.key.sy }, { it.key.index })).map { KnownSave(ref(it.key), it.value.day, it.value.sell) },
+            news = _news.map { LedgerSave(it.day, it.systemName, it.text) },
+            stats = stats.entries.sortedBy { it.key.ordinal }.associate { it.key.name to it.value },
+            campaign = campaign?.let { c ->
+                CampaignSave(PersonSave(c.creditor.name, c.creditor.role, c.creditor.faction.id), c.total, c.paid, c.deadline, c.checked, c.missed, c.outcome?.name, c.epilogueSeen)
+            },
         )
     }
 
@@ -525,20 +871,30 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
             fun sys(r: SysRef) = universe.system(com.mercador.core.universe.SystemId(save.galaxy, r.sx, r.sy, r.index))
                 ?: throw SaveException("Sistema ${r.sx},${r.sy}#${r.index} não existe neste universo.")
             val systems = save.region.map(::sys)
-            val world = World(com.mercador.core.universe.Region(universe, save.galaxy, systems))
+            val world = World(com.mercador.core.universe.Region(universe, save.galaxy, systems), save.living)
             fun id(r: SysRef) = com.mercador.core.universe.SystemId(save.galaxy, r.sx, r.sy, r.index)
             fun <T : Enum<T>> named(cls: Class<T>, name: String): T =
                 cls.enumConstants.firstOrNull { it.name == name } ?: throw SaveException("Valor desconhecido no save: $name")
+            val nFactions = world.factions.factions.size
+            if (save.controllers.any { it.value !in 0 until nFactions }) throw SaveException("Facção desconhecida no save.")
             world.restore(
                 save.day,
                 save.meterDeltas.associate { id(it.system) to doubleArrayOf(it.control, it.discontent, it.supply) },
                 save.volumes.associate { (id(it.system) to named(Commodity::class.java, it.commodity)) to it.tons },
+                com.mercador.core.world.LivingState(
+                    save.controllers.associate { id(it.system) to it.value },
+                    save.unrestDays.associate { id(it.system) to it.value },
+                    save.lastRevolt.associate { id(it.system) to it.value },
+                    save.crises.map { com.mercador.core.world.Crisis(named(com.mercador.core.world.CrisisKind::class.java, it.kind), id(it.system), it.systemName, it.start, it.end, it.need) },
+                ),
             )
             // o local atual tem de ser a MESMA instância da lista da região: o jogo compara sistemas por identidade
             val here = world.region.systems.firstOrNull { it.id == id(save.location) }
                 ?: throw SaveException("A localização do save não pertence à região.")
             val g = Game(world, here, save.credits, save.stories)
-            g.fuel = save.fuel.coerceIn(0, FUEL_CAPACITY)
+            g.known.clear()
+            save.upgrades.forEach { (k, v) -> val u = named(Upgrade::class.java, k); g.upgrades[u] = v.coerceIn(0, u.maxLevel) }
+            g.fuel = save.fuel.coerceIn(0, g.fuelCapacity)
             g.debt = save.debt
             save.cargo.forEach { (k, v) -> g.cargo[named(Commodity::class.java, k)] = v }
             save.ledger.forEach { g._ledger += LedgerEntry(it.day, it.system, it.text) }
@@ -554,6 +910,24 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
             }
             g.sceneWins = save.sceneWins; g.intimidationWins = save.intimidationWins
             g.storySeen.putAll(save.storySeen)
+            for (c in save.contracts) {
+                if (c.client !in 0 until nFactions) throw SaveException("Facção desconhecida no save.")
+                g._contracts += Contract(c.id, named(ContractKind::class.java, c.kind), named(Commodity::class.java, c.commodity), c.tons, id(c.destination), c.destName, c.deadline, c.reward, c.client, c.clientName)
+            }
+            g.takenOffers += save.takenOffers
+            save.avgCost.forEach { (k, v) -> g.avgCost[named(Commodity::class.java, k)] = v }
+            for (k in save.known) {
+                if (k.sell.size != Commodity.values().size) throw SaveException("Preços conhecidos inválidos no save.")
+                g.known[id(k.system)] = KnownMarket(k.day, k.sell)
+            }
+            if (g.known.isEmpty()) g.remember(here)
+            save.news.forEach { g._news += LedgerEntry(it.day, it.system, it.text) }
+            save.stats.forEach { (k, v) -> g.stats[named(Stat::class.java, k)] = v }
+            save.campaign?.let { c ->
+                val f = g.factions.factions.firstOrNull { it.id == c.creditor.faction } ?: throw SaveException("Facção desconhecida no save.")
+                g.campaign = Campaign(Person(c.creditor.name, c.creditor.role, f), c.total, c.paid, c.deadline, c.checked, c.missed,
+                    c.outcome?.let { named(CampaignOutcome::class.java, it) }, c.epilogueSeen)
+            }
             return g
         }
 
