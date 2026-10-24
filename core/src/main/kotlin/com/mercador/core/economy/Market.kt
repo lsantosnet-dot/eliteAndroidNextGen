@@ -2,6 +2,7 @@ package com.mercador.core.economy
 
 import com.mercador.core.rng.Rng
 import com.mercador.core.rng.derive
+import com.mercador.core.universe.Ideology
 import com.mercador.core.universe.StarSystem
 
 enum class Trend { SOBE, ESTAVEL, CAI }
@@ -33,16 +34,17 @@ object Market {
 
     fun entries(system: StarSystem, day: Int): List<MarketEntry> = Commodity.values().map { entry(system, it, day) }
 
-    fun entry(system: StarSystem, c: Commodity, day: Int): MarketEntry {
+    /** [ideology] é a de quem governa hoje (muda numa revolta); por padrão, a gerada. */
+    fun entry(system: StarSystem, c: Commodity, day: Int, ideology: Ideology = system.traits.ideology): MarketEntry {
         val period = Math.floorDiv(day, PERIOD_DAYS)
-        val now = multiplier(system, c, period)
-        val before = multiplier(system, c, period - 1)
+        val now = multiplier(system, c, period, ideology)
+        val before = multiplier(system, c, period - 1, ideology)
         val t = system.traits
         val sysKey = system.seedKey()
 
         val produced = t.economy in c.producedBy
         val demanded = t.economy in c.demandedBy
-        val illegal = c.bannedBy(t.ideology)
+        val illegal = c.bannedBy(ideology)
 
         val price = (c.basePrice * now).toInt().coerceAtLeast(1)
         val prodScale = 0.3 + t.productivity / 100.0
@@ -69,13 +71,13 @@ object Market {
     }
 
     /** Fator sobre o preço base: estrutura do sistema × ruído estável por sistema × ruído por período. */
-    private fun multiplier(system: StarSystem, c: Commodity, period: Int): Double {
+    private fun multiplier(system: StarSystem, c: Commodity, period: Int, ideology: Ideology): Double {
         val t = system.traits
         val sysKey = system.seedKey()
         var m = 1.0
         if (t.economy in c.producedBy) m *= 0.85 - 0.30 * t.productivity / 100.0      // 0.55..0.85
         if (t.economy in c.demandedBy) m *= 1.20 + 0.25 * (100 - t.stability) / 100.0 // 1.20..1.45
-        if (c.bannedBy(t.ideology)) m *= 1.0 + 0.6 * t.surveillance / 100.0 + 0.2 // prêmio de risco: 1.2..1.8
+        if (c.bannedBy(ideology)) m *= 1.0 + 0.6 * t.surveillance / 100.0 + 0.2 // prêmio de risco: 1.2..1.8
         // Sistemas de alta tecnologia pagam mais por bens sofisticados.
         if (c.basePrice >= 100) m *= 1.0 + (t.techLevel - 8) * 0.01
         val fixed = 0.95 + Rng(derive(sysKey, c.ordinal.toLong(), FIXED)).nextDouble() * 0.10

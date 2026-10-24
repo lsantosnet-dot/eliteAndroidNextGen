@@ -10,7 +10,7 @@ import com.mercador.core.game.SaveSlots
 import com.mercador.core.universe.StarSystem
 import com.mercador.core.world.Side
 
-enum class StationTab(val label: String) { MERCADO("Mercado"), SISTEMA("Dossiê"), BAR("Bar") }
+enum class StationTab(val label: String) { MERCADO("Mercado"), CONTRATOS("Contratos"), ESTALEIRO("Estaleiro"), SISTEMA("Dossiê"), BAR("Bar") }
 
 /** Mensagem de desfecho mostrada em tela cheia (resultado de uma decisão) até o jogador continuar. */
 class Report(val kicker: String, val text: String)
@@ -48,9 +48,13 @@ class GameController(
     var notice by mutableStateOf<String?>(null)
     var rumor by mutableStateOf<String?>(null)
     var report by mutableStateOf<Report?>(null)
-    /** Animação de hiperespaço em curso; some sozinha ao terminar ([finishJump]) ou ao toque. */
-    var jump by mutableStateOf<Jump?>(null)
+    /** Animação em tela cheia tocando agora (salto, atracação, interceptação...); some ao terminar ou ao toque. */
+    var cinematic by mutableStateOf<Cinematic?>(null)
         private set
+    /** As que tocam depois desta, em ordem. */
+    private val queue = ArrayDeque<Cinematic>()
+    /** O salto no hiperespaço, enquanto é ele que está tocando. */
+    val jump: Jump? get() = cinematic as? Jump
 
     private fun touch() {
         version++
@@ -64,6 +68,7 @@ class GameController(
     private fun resetUi() {
         tab = Tab.ESTACAO; stationTab = StationTab.MERCADO; selectedSystem = null; selectedCommodity = null
         quantity = 1; report = null; rumor = null; pendingDelete = null
+        queue.clear(); cinematic = null
     }
 
     private fun swap(g: Game, id: Int?, msg: String) {
@@ -118,7 +123,18 @@ class GameController(
     fun selectCommodity(c: Commodity) { selectedCommodity = c; touch() }
     fun cycleQuantity() { quantity = when (quantity) { 1 -> 5; 5 -> 10; else -> 1 }; touch() }
     fun dismissReport() { report = null; touch() }
-    fun finishJump() { if (jump != null) { jump = null; version++ } }
+    /** Encerra a animação atual e passa para a próxima da fila (idempotente quando não há nenhuma). */
+    fun finishCinematic() {
+        if (cinematic == null) return
+        cinematic = queue.removeFirstOrNull()
+        version++
+    }
+    fun finishJump() = finishCinematic()
+
+    private fun play(list: List<Cinematic>) {
+        queue.clear(); queue.addAll(list)
+        cinematic = queue.removeFirstOrNull()
+    }
 
     fun buy() {
         val c = selectedCommodity ?: return fail("Escolha uma mercadoria.")
@@ -140,6 +156,32 @@ class GameController(
         }
     }
 
+    fun acceptContract(k: Contract) = simple(game.acceptContract(k), "Contrato aceito: ${k.tons} t de ${k.cargoLabel} para ${k.destName} até o dia ${k.deadline}.")
+    fun abandonContract(id: Long) = simple(game.abandonContract(id), "Contrato abandonado. O cliente vai lembrar.")
+
+    fun deliverContract(id: Long) {
+        val (o, text) = game.deliverContract(id)
+        if (o is Outcome.Fail) fail(describe(o.reason)) else { report = Report("Contrato cumprido", text ?: ""); touch() }
+    }
+
+    fun buyUpgrade(u: Upgrade) {
+        val o = game.buyUpgrade(u)
+        if (o is Outcome.Fail) return fail(describe(o.reason))
+        play(listOf(Install(u, game.level(u))))
+        notice = "${u.label} instalado (nível ${game.level(u)})."
+        touch()
+    }
+
+    fun payCreditor() {
+        val o = game.payCreditor()
+        if (o is Outcome.Fail) return fail(describe(o.reason))
+        val c = game.campaign!!
+        notice = if (c.remaining == 0) "Dívida quitada." else "Pagou ao agiota. Faltam ${credits(c.remaining)}."
+        touch()
+    }
+
+    fun dismissEpilogue() { game.dismissEpilogue(); touch() }
+
     fun refuel() = simple(game.refuel(), "Tanque cheio.")
     fun takeLoan() = simple(game.takeLoan(), "Empréstimo concedido. A dívida cresce.")
     fun haulFreight() = simple(game.haulFreight(), "Frete cumprido: cinco dias a mais e algumas moedas.")
@@ -154,13 +196,28 @@ class GameController(
         val from = game.location
         val ly = game.fuelCost(to)
         val days = game.travelDays(to)
+        val newsBefore = game.news.size
+        val rulers = game.world.region.systems.associateWith { game.world.controller(it) }
         when (val o = game.travel(to)) {
             is Outcome.Fail -> fail(describe(o.reason))
             else -> {
-                // Saltou: a animação sempre toca antes de a chegada (estação, perseguição ou história) aparecer.
-                jump = Jump(from.name, to.name, ly, days)
+                // Saltou: as animações sempre tocam antes de a chegada (estação, perseguição ou história) aparecer.
+                // Salto, revoltas que aconteceram no caminho e, por fim, atracação ou interceptação.
+                val seq = ArrayList<Cinematic>()
+                seq += Jump(from.name, to.name, ly, days)
+                for ((s, old) in rulers) {
+                    val now = game.world.controller(s)
+                    if (now.id != old.id) seq += Revolt(s.name, old, now)
+                }
+                val here = game.location
+                seq += when (o) {
+                    is Outcome.Pursued -> Interception(here.name, o.pursuit.patrol, "${o.pursuit.evidenceTons} t de carga comprometedora")
+                    is Outcome.Confronting -> Interception(here.name, o.scene.opponent.faction, "${o.scene.opponent.name} veio pessoalmente")
+                    else -> Docking(here.name, game.faction, here.seedKey())
+                }
+                play(seq)
                 selectedSystem = null; tab = Tab.ESTACAO; stationTab = StationTab.MERCADO
-                if (o is Outcome.Ok) notice = "Chegou a ${to.name}."
+                if (o is Outcome.Ok) notice = "Chegou a ${to.name}." + (game.news.drop(newsBefore).lastOrNull()?.let { " Jornal: ${it.text}" } ?: "")
                 touch()
             }
         }
@@ -213,6 +270,12 @@ class GameController(
             Failure.SEM_DIVIDA -> "Você não deve nada."
             Failure.NAO_ELEGIVEL -> "Você ainda tem como se virar sozinho."
             Failure.SEM_BAR -> "Não há bar aqui."
+            Failure.SEM_CONTRATO -> "Esse contrato não está mais disponível."
+            Failure.LIMITE_DE_CONTRATOS -> "Você já tem ${Contracts.MAX_ACTIVE} contratos em aberto."
+            Failure.CONTRATO_EM_OUTRO_LUGAR -> "A entrega é em outro sistema."
+            Failure.SEM_ESTALEIRO -> "Esta estação não vende isso."
+            Failure.NIVEL_MAXIMO -> "Já está no nível máximo."
+            Failure.SEM_CAMPANHA -> "Não há dívida a pagar."
         }
     }
 }

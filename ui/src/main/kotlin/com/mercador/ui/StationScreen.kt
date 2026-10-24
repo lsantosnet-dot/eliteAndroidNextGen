@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -26,7 +27,11 @@ import com.mercador.core.economy.PriceReason
 import com.mercador.core.economy.Trend
 import com.mercador.core.game.Bar
 import com.mercador.core.game.BarOffer
+import com.mercador.core.game.Contract
+import com.mercador.core.game.ContractKind
+import com.mercador.core.game.Contracts
 import com.mercador.core.game.Game
+import com.mercador.core.game.Upgrade
 import com.mercador.core.rng.Rng
 import com.mercador.core.rng.derive
 import com.mercador.core.world.MeterModel
@@ -45,21 +50,33 @@ class StationUi(
     val onBuy: () -> Unit = {},
     val onSell: () -> Unit = {},
     val onRumor: (BarOffer) -> Unit = {},
+    val onAccept: (Contract) -> Unit = {},
+    val onDeliver: (Long) -> Unit = {},
+    val onAbandon: (Long) -> Unit = {},
+    val onUpgrade: (Upgrade) -> Unit = {},
 )
 
 /** Estação: mercado com consequências (maquete 2). */
 @Composable
 fun StationScreen(game: Game, onTab: (Tab) -> Unit = {}, ui: StationUi = StationUi()) {
     val s = game.location
-    val color = Noir.faction(s.faction)
+    val ruler = game.faction
+    val color = Noir.faction(ruler)
     val vigiado = s.traits.surveillance >= 60
+    val crisis = game.world.crisisAt(s)
     Column(Modifier.fillMaxSize().background(Noir.bg)) {
         Box(Modifier.fillMaxWidth().height(150.dp)) {
             Skyline(s.seedKey(), color)
             Column(Modifier.padding(16.dp)) {
                 T("Estação ${s.name}", 26f, Noir.text, Noir.serif)
                 Spacer(Modifier.height(4.dp))
-                T("${s.faction.name.uppercase()} · ${if (vigiado) "PORTO VIGIADO" else "PORTO LIVRE"}", 11f, color, spacing = 1.5f)
+                T("${ruler.name.uppercase()} · ${if (vigiado) "PORTO VIGIADO" else "PORTO LIVRE"}", 11f, color, spacing = 1.5f)
+                crisis?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.clip(RoundedCornerShape(4.dp)).background(Noir.dangerBg).border(1.dp, Noir.dangerLine, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                        T("${it.kind.label.uppercase()} · ${it.daysLeft(game.day)} DIAS" + if (it.need > 0) " · FALTAM ${it.need} T" else "", 10f, Noir.salmon, spacing = 1f)
+                    }
+                }
             }
             Column(Modifier.align(Alignment.TopEnd).padding(16.dp), horizontalAlignment = Alignment.End) {
                 T(credits(game.credits), 14f, color, Noir.mono)
@@ -68,17 +85,19 @@ fun StationScreen(game: Game, onTab: (Tab) -> Unit = {}, ui: StationUi = Station
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Noir.line))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             for (t in StationTab.values()) Column(Modifier.clickable { ui.onTab(t) }) {
-                T(t.label.uppercase(), 12f, if (t == ui.tab) Noir.amber else Noir.muted, spacing = 1.5f)
+                val badge = if (t == StationTab.CONTRATOS && game.contracts.any { game.canDeliver(it) }) " •" else ""
+                T(t.label.uppercase() + badge, 12f, if (t == ui.tab) Noir.amber else Noir.muted, spacing = 1.2f)
                 if (t == ui.tab) Box(Modifier.padding(top = 5.dp).width(54.dp).height(2.dp).background(Noir.amber))
             }
-            T("CONTRATOS", 12f, Noir.line, spacing = 1.5f)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Noir.line))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             when (ui.tab) {
                 StationTab.MERCADO -> MarketBody(game, ui)
+                StationTab.CONTRATOS -> ContractsBody(game, ui)
+                StationTab.ESTALEIRO -> ShipyardBody(game, ui)
                 StationTab.SISTEMA -> SystemBody(game)
                 StationTab.BAR -> BarBody(game, ui)
             }
@@ -100,7 +119,7 @@ fun StationScreen(game: Game, onTab: (Tab) -> Unit = {}, ui: StationUi = Station
 @Composable
 private fun MarketBody(game: Game, ui: StationUi) {
     val s = game.location
-    val color = Noir.faction(s.faction)
+    val color = Noir.faction(game.faction)
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         T("MERCADORIA", 10f, Noir.muted, spacing = 1.5f, modifier = Modifier.weight(2.1f))
         T("PREÇO", 10f, Noir.muted, spacing = 1.5f, modifier = Modifier.weight(1f))
@@ -138,13 +157,14 @@ private fun SystemBody(game: Game) {
         Column {
             Label("Bens proibidos aqui", Noir.salmon)
             Spacer(Modifier.height(4.dp))
-            T(com.mercador.core.economy.Laws.banned(t.ideology).joinToString(" · ") { it.label }, 13f, Noir.text, Noir.serif)
+            T(com.mercador.core.economy.Laws.banned(game.ideology).joinToString(" · ") { it.label }, 13f, Noir.text, Noir.serif)
         }
+        if (game.faction.id != s.faction.id) T("Desde a revolta, governado por ${game.faction.name} (antes, ${s.faction.name}).", 12f, Noir.salmon, Noir.serif, italic = true)
         Column {
-            Label("Relações da ${s.faction.name}")
+            Label("Relações da ${game.faction.name}")
             Spacer(Modifier.height(6.dp))
-            for (o in game.factions.factions.filter { it.id != s.faction.id }) {
-                val r = game.factions.relation(s.faction.id, o.id)
+            for (o in game.factions.factions.filter { it.id != game.faction.id }) {
+                val r = game.factions.relation(game.faction.id, o.id)
                 Row { T(o.name, 12.5f, Noir.faction(o), modifier = Modifier.weight(1f)); T(if (r > 20) "aliada" else if (r < -20) "hostil" else "neutra", 12f, Noir.muted) }
             }
         }
@@ -174,14 +194,93 @@ private fun BarBody(game: Game, ui: StationUi) {
 }
 
 @Composable
+private fun ContractsBody(game: Game, ui: StationUi) {
+    Column(Modifier.padding(horizontal = 10.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (game.contracts.isNotEmpty()) {
+            Label("Em aberto (${game.contracts.size} / ${Contracts.MAX_ACTIVE})", Noir.amber, Modifier.padding(horizontal = 6.dp))
+            for (k in game.contracts) ContractCard(game, k, active = true, ui = ui)
+        }
+        Label("Ofertas desta estação", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+        val offers = game.offers()
+        if (offers.isEmpty()) T("Nenhuma oferta agora. Volte em alguns dias.", 12.5f, Noir.sub, Noir.serif, italic = true, modifier = Modifier.padding(horizontal = 6.dp))
+        for (k in offers) ContractCard(game, k, active = false, ui = ui)
+    }
+}
+
+@Composable
+private fun ContractCard(game: Game, k: Contract, active: Boolean, ui: StationUi) {
+    val sealed = k.kind == ContractKind.LACRADA
+    val left = k.daysLeft(game.day)
+    val dest = game.world.region.systems.firstOrNull { it.id == k.destination }
+    val dist = dest?.let { "%.1f".format(game.world.region.distanceLy(game.location, it)) + " LY" } ?: ""
+    val kindColor = when (k.kind) { ContractKind.LACRADA -> Noir.salmon; ContractKind.SOCORRO -> Noir.teal; ContractKind.ENTREGA -> Noir.amber }
+    Card(Modifier.fillMaxWidth(), border = if (sealed) Noir.dangerLine else Noir.line, fill = if (sealed) Noir.dangerBg else Noir.panel) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T(k.kind.label.uppercase(), 10f, kindColor, spacing = 1.5f, modifier = Modifier.weight(1f))
+            T(credits(k.reward), 14f, Noir.amber, Noir.mono)
+        }
+        Spacer(Modifier.height(4.dp))
+        T("${k.tons} t de ${k.cargoLabel} para ${k.destName}", 14f, Noir.text, weight = FontWeight.Bold)
+        T("$dist · ${if (active) "faltam $left dia(s)" else "prazo: dia ${k.deadline} ($left dias)"} · ${k.clientName}", 11f, if (active && left <= 3) Noir.salmon else Noir.muted, Noir.mono)
+        val hint = when (k.kind) {
+            ContractKind.ENTREGA -> if (active) "você tem ${game.ownTons(k.commodity)} t; compre o resto onde for barato" else "compre a carga você mesmo; o contrato paga mais que o mercado"
+            ContractKind.SOCORRO -> "encurta a crise de lá e rende favor"
+            ContractKind.LACRADA -> "sem perguntas: a carga vem agora, ocupa o porão e pode ser proibida no caminho"
+        }
+        T(hint, 11.5f, Noir.sub, Noir.serif, italic = true)
+        Spacer(Modifier.height(8.dp))
+        if (active) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (game.canDeliver(k)) PrimaryButton("Entregar", Modifier.weight(1f)) { ui.onDeliver(k.id) }
+            OutlineButton("Desistir", Modifier.weight(1f), Noir.sub) { ui.onAbandon(k.id) }
+        } else OutlineButton("Aceitar", Modifier.fillMaxWidth()) { ui.onAccept(k) }
+    }
+}
+
+@Composable
+private fun ShipyardBody(game: Game, ui: StationUi) {
+    Column(Modifier.padding(horizontal = 10.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val here = game.shipyard()
+        T(if (here.isEmpty()) "Esta estação não tem estaleiro nem mercado negro." else "O dinheiro compra o que vem depois do próximo salto.",
+            12.5f, Noir.sub, Noir.serif, italic = true, modifier = Modifier.padding(horizontal = 6.dp))
+        for ((u, price) in here) {
+            val lvl = game.level(u)
+            Card(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    T(u.label, 14f, Noir.text, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    T("nível $lvl / ${u.maxLevel}", 11f, Noir.muted, Noir.mono)
+                }
+                T(u.effect, 11.5f, Noir.sub)
+                Spacer(Modifier.height(8.dp))
+                if (price == null) OutlineButton("No máximo", Modifier.fillMaxWidth(), Noir.muted)
+                else if (price <= game.credits) PrimaryButton("Instalar · ${credits(price)}", Modifier.fillMaxWidth()) { ui.onUpgrade(u) }
+                else OutlineButton("Instalar · ${credits(price)}", Modifier.fillMaxWidth(), Noir.muted) { ui.onUpgrade(u) }
+            }
+        }
+        val elsewhere = Upgrade.values().filter { u -> here.none { it.first == u } }
+        if (elsewhere.isNotEmpty()) {
+            Label("Em outros lugares", modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
+            for (u in elsewhere) Row(Modifier.padding(horizontal = 6.dp)) {
+                Column(Modifier.weight(1f)) {
+                    T(u.label + " · nível ${game.level(u)} / ${u.maxLevel}", 12.5f, Noir.text)
+                    T(u.where, 11f, Noir.muted)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MarketRow(game: Game, c: Commodity, selected: Boolean = false, onClick: () -> Unit = {}) {
     val s = game.location
     val e = game.world.quote(s, c)
-    val prev = Market.entry(s, c, game.day - Market.PERIOD_DAYS).price
+    val prev = Market.entry(s, c, game.day - Market.PERIOD_DAYS, game.ideology).price
     val pct = if (prev > 0) ((e.price - prev) * 100.0 / prev).roundToInt() else 0
     val up = e.trend == Trend.SOBE; val down = e.trend == Trend.CAI
     val tcolor = if (up) Noir.red else if (down) Noir.teal else Noir.muted
+    val crisis = game.world.crisisAt(s)
     val tag = when {
+        crisis != null && c in crisis.kind.wants -> "crise: ${crisis.kind.label.lowercase()} · paga ×${"%.1f".format(crisis.kind.mult)}"
+        crisis != null && c in crisis.kind.surplus -> "sobra: ${crisis.kind.label.lowercase()} · barato"
         e.illegal -> "legal em ${game.factions.factions.firstOrNull { !c.bannedBy(it.ideology) }?.name?.substringAfterLast(' ') ?: "outro lugar"} · lucro alto"
         e.reason == PriceReason.ESCASSO && c in MeterModel.essential -> "essencial · " + (if (game.world.meters(s).rationing) "racionado" else "escasso aqui")
         c in MeterModel.essential -> "essencial · ${e.reason.label}".trimEnd(' ', '·')
@@ -214,16 +313,19 @@ private fun MarketRow(game: Game, c: Commodity, selected: Boolean = false, onCli
 
 @Composable
 private fun Hold(game: Game) {
-    val cap = Game.HOLD_CAPACITY.toFloat()
-    val illegal = game.evidence()
-    val legal = game.cargo.filterKeys { it !in illegal }
+    val cap = game.holdCapacity.toFloat()
+    val own = game.cargo.keys.associateWith { game.ownTons(it) }.filterValues { it > 0 }
+    val illegal = own.filterKeys { game.isIllegalHere(it) }
+    val legal = own.filterKeys { it !in illegal }
+    val sealed = game.sealedTons
     Column(Modifier.padding(horizontal = 16.dp)) {
-        Label("Porão ${game.holdUsed} / ${Game.HOLD_CAPACITY} t")
+        Label("Porão ${game.holdUsed} / ${game.holdCapacity} t" + if (game.hiddenCapacity > 0) " · ${game.hiddenCapacity} t ocultas" else "")
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50)).background(Noir.track)) {
             val colors = listOf(Noir.amber, Noir.violet, Noir.teal)
             legal.entries.forEachIndexed { i, (_, t) -> Box(Modifier.weight(t / cap).fillMaxHeight().background(colors[i % colors.size])) }
             if (illegal.isNotEmpty()) Box(Modifier.weight(illegal.values.sum() / cap).fillMaxHeight().background(Noir.red))
+            if (sealed > 0) Box(Modifier.weight(sealed / cap).fillMaxHeight().background(Noir.salmon))
             val free = cap - game.holdUsed
             if (free > 0) Spacer(Modifier.weight(free / cap))
         }
@@ -231,6 +333,7 @@ private fun Hold(game: Game) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             legal.entries.take(2).forEach { (c, t) -> T("${c.label} $t t", 11f, Noir.text) }
             if (illegal.isNotEmpty()) T("Carga oculta ${illegal.values.sum()} t", 11f, Noir.salmon)
+            if (sealed > 0) T("Lacrada $sealed t", 11f, Noir.salmon)
             if (game.cargo.isEmpty()) T("Porão vazio", 11f, Noir.muted)
         }
     }

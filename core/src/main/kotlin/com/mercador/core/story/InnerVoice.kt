@@ -25,6 +25,12 @@ object InnerVoice {
             "O porão pesa mais do que as toneladas dizem.", "Um scanner, uma pergunta. É tudo o que separa o lucro da cadeia.")),
         Rule({ it.ledger.lastOrNull()?.text?.contains("racionamento") == true }, listOf(
             "A fila ainda está na minha cabeça.", "Alguns lugares não têm o que vender, só o que perder.")),
+        Rule({ g -> g.campaign?.let { c -> !c.over && c.next()?.let { (d, falta) -> falta > g.credits && d - g.day <= 15 } == true } == true }, listOf(
+            "A parcela vence e o cofre não fecha a conta.", "Ele não manda lembrete. Manda gente.")),
+        Rule({ g -> g.contracts.any { it.kind == com.mercador.core.game.ContractKind.LACRADA } }, listOf(
+            "Caixas lacradas. Eu só dirijo. É o que todos dizem.", "Não perguntar é um serviço. Cobrado à parte.")),
+        Rule({ it.world.crisisAt(it.location) != null }, listOf(
+            "Crise é quando a necessidade dos outros vira o meu preço.", "Daqui a um mês ninguém lembra. Eles lembram.")),
         Rule({ it.credits >= 5000 }, listOf(
             "Dinheiro de sobra. O que isso me compra além de mais um salto?", "Já cheguei longe demais para parar por vontade.")),
         Rule({ it.credits < 200 }, listOf(

@@ -23,7 +23,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mercador.core.game.Game
-import com.mercador.core.game.PursuitRules
 import com.mercador.core.universe.StarSystem
 
 /** Mapa da galáxia: a mesa de inteligência (maquete 1). */
@@ -40,7 +39,7 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth()) {
                 T("DIA ${game.day} · ATENÇÃO ${attentionBars(game.standing.heat(game.faction))}", 11f, Noir.muted, Noir.mono, modifier = Modifier.weight(1f))
-                T("COMB ${game.fuel} / ${Game.FUEL_CAPACITY}", 11f, Noir.muted, Noir.mono)
+                T("COMB ${game.fuel} / ${game.fuelCapacity}", 11f, Noir.muted, Noir.mono)
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Noir.line))
@@ -60,7 +59,7 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
                 var gy = 0f; while (gy < size.height) { drawLine(Noir.line.copy(alpha = .35f), Offset(0f, gy), Offset(size.width, gy)); gy += step }
                 // influência: manchas de cor por facção
                 for (f in factions) {
-                    val mine = region.systems.filter { it.faction.id == f.id }
+                    val mine = region.systems.filter { game.world.controller(it).id == f.id }
                     if (mine.isEmpty()) continue
                     val c = Offset(mine.map { pos(it).x }.average().toFloat(), mine.map { pos(it).y }.average().toFloat())
                     drawCircle(Brush.radialGradient(listOf(Noir.faction(f).copy(alpha = .28f), Color.Transparent), c, 150f * density), 150f * density, c)
@@ -71,12 +70,27 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
                 }
                 // zona interditada: facção que o trata como inimigo
                 for (f in factions.filter { game.standing.isRestricted(it) }) {
-                    val mine = region.systems.filter { it.faction.id == f.id }
+                    val mine = region.systems.filter { game.world.controller(it).id == f.id }
                     if (mine.isNotEmpty()) {
                         val c = Offset(mine.map { pos(it).x }.average().toFloat(), mine.map { pos(it).y }.average().toFloat())
                         drawCircle(Noir.red, 55f * density, c, style = Stroke(1.5f * density, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f * density, 5f * density))))
                         drawText(measurer.measure("ZONA INTERDITADA", TextStyle(Noir.red, 10.sp, letterSpacing = 3.sp)), topLeft = c + Offset(-60f * density, -72f * density))
                     }
+                }
+                // crises: anel pulsante vermelho e o nome da crise
+                for (cr in game.world.crises) {
+                    val sys = region.systems.firstOrNull { it.id == cr.system } ?: continue
+                    val p = pos(sys)
+                    drawCircle(Noir.red.copy(alpha = .18f), 16f * density, p)
+                    drawCircle(Noir.red, 13f * density, p, style = Stroke(1.5f * density, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3f * density, 3f * density))))
+                    drawText(measurer.measure(cr.kind.label.uppercase(), TextStyle(Noir.salmon, 8.sp, letterSpacing = 1.sp)), topLeft = p + Offset(-14f * density, 14f * density))
+                }
+                // destinos de contrato: losango âmbar
+                for (k in game.contracts) {
+                    val sys = region.systems.firstOrNull { it.id == k.destination } ?: continue
+                    val p = pos(sys); val r = 8f * density
+                    val path = androidx.compose.ui.graphics.Path().apply { moveTo(p.x, p.y - r); lineTo(p.x + r, p.y); lineTo(p.x, p.y + r); lineTo(p.x - r, p.y); close() }
+                    drawPath(path, Noir.amber, style = Stroke(1.5f * density))
                 }
                 // rota planejada
                 if (selected !== game.location) drawLine(Noir.amber, pos(game.location), pos(selected), 2f * density,
@@ -85,7 +99,7 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
                 val labeled = ArrayList<Offset>()
                 val ordered = region.systems.sortedByDescending { it === game.location || it === selected }
                 for (s in ordered) {
-                    val p = pos(s); val col = Noir.faction(s.faction)
+                    val p = pos(s); val col = Noir.faction(game.world.controller(s))
                     val here = s === game.location; val sel = s === selected
                     drawCircle(col, (if (here || sel) 5f else 3.5f) * density, p)
                     if (here || sel) drawCircle(if (here) Noir.text else Noir.amber, 9f * density, p, style = Stroke(2f * density))
@@ -116,17 +130,18 @@ fun MapScreen(game: Game, selected: StarSystem, onSelect: (StarSystem) -> Unit =
 @Composable
 private fun SystemCard(game: Game, s: StarSystem, onTravel: () -> Unit, notice: String?) {
     val m = game.world.meters(s)
-    val color = Noir.faction(s.faction)
+    val ruler = game.world.controller(s)
+    val color = Noir.faction(ruler)
     val cost = if (s === game.location) 0 else game.fuelCost(s)
-    val chance = PursuitRules.encounterChance(game.standing.heat(s.faction), s.traits.surveillance,
-        game.cargo.keys.any { it.bannedBy(s.traits.ideology) }, game.standing.isRestricted(s.faction))
+    val chance = game.encounterChance(s)
+    val crisis = game.world.crisisAt(s)
     val risk = when { chance < .15 -> "baixo"; chance < .35 -> "médio"; else -> "alto" }
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = 10.dp, vertical = 8.dp)) {
         Box(Modifier.width(4.dp).fillMaxHeight().background(color))
         Card(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 T(s.name, 24f, Noir.text, Noir.serif, modifier = Modifier.weight(1f))
-                T(s.faction.name.uppercase(), 11f, color, spacing = 1.5f)
+                T(ruler.name.uppercase(), 11f, color, spacing = 1.5f)
             }
             Spacer(Modifier.height(4.dp))
             T("${s.traits.economy.label} · TL ${s.traits.techLevel} · ${s.traits.population} mi · corrupção ${s.traits.corruption}", 11f, Noir.muted, Noir.mono)
@@ -141,15 +156,43 @@ private fun SystemCard(game: Game, s: StarSystem, onTravel: () -> Unit, notice: 
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     T(if (cost == 0) "Você está aqui" else "Salto: $cost LY · ${game.travelDays(s)} dias", 11f, Noir.text)
                     T("Risco de rota: $risk", 11f, Noir.text)
-                    if (m.unrest) T("⚠ À beira da revolta", 11f, Noir.red) else if (m.rationing) T("⚠ Racionamento", 11f, Noir.red)
+                    if (crisis != null) T("⚠ ${crisis.kind.label}: ${crisis.daysLeft(game.day)} dias", 11f, Noir.red)
+                    else if (m.nearRevolt) T("⚠ À beira da revolta", 11f, Noir.red) else if (m.rationing) T("⚠ Racionamento", 11f, Noir.red)
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            Intel(game, s)
             Spacer(Modifier.height(10.dp))
             if (notice != null) { T(notice, 11.5f, Noir.salmon, italic = true, modifier = Modifier.padding(bottom = 6.dp)) }
             val can = s !== game.location && cost <= game.fuel
             if (can) PrimaryButton("Saltar para ${s.name}", Modifier.fillMaxWidth(), onTravel)
             else OutlineButton(if (s === game.location) "Você está aqui" else "Combustível insuficiente", Modifier.fillMaxWidth(), Noir.muted, onTravel)
         }
+    }
+}
+
+/**
+ * O que o jogador sabe do mercado de [s]: venda estimada da carga, a melhor compra daqui para lá e contratos
+ * a receber. Sem preços conhecidos, diz como consegui-los.
+ */
+@Composable
+private fun Intel(game: Game, s: StarSystem) {
+    val est = game.estimateSale(s)
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (est == null) {
+            T("Preços de lá: desconhecidos. Visite ou compre um rumor no bar.", 11f, Noir.muted, italic = true)
+        } else {
+            val age = game.day - est.seenDay
+            val seen = if (s === game.location) "preços de hoje" else if (age == 0) "preços vistos hoje" else "preços de $age dia(s) atrás"
+            if (est.revenue > 0) {
+                val sign = if (est.profit >= 0) "+" else ""
+                T("Sua carga lá: ${credits(est.revenue)} ($sign${credits(est.profit)}) · $seen", 11f, if (est.profit >= 0) Noir.teal else Noir.salmon)
+            } else T("Carga para vender lá: nenhuma · $seen", 11f, Noir.muted)
+            if (est.bannedTons > 0) T("${est.bannedTons} t da sua carga são proibidas lá", 11f, Noir.salmon)
+            game.bestRun(s)?.let { (c, gain) -> T("Melhor compra daqui: ${c.label.lowercase()}, +$gain cr/t lá", 11f, Noir.amber) }
+        }
+        val pay = game.contracts.filter { it.destination == s.id }
+        if (pay.isNotEmpty()) T("◆ ${pay.size} contrato(s) para cá: ${credits(pay.sumOf { it.reward })}", 11f, Noir.amber)
     }
 }
 

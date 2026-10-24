@@ -69,6 +69,27 @@ object Preview {
         return null
     }
 
+    /**
+     * Joga uma campanha com mundo vivo até haver crise no jornal, um contrato aceito e uma melhoria instalada,
+     * atracado num sistema com estaleiro. Determinístico (semente fixa).
+     */
+    private fun livingDemo(): Game {
+        for (seed in 1L..40L) {
+            val world = World(Region.around(Universe(seed)), living = true)
+            val g = Game(world, world.region.systems[0], credits = 6_000, stories = false, campaign = true)
+            repeat(40) {
+                g.refuel()
+                if (g.contracts.isEmpty()) g.offers().firstOrNull { it.kind != ContractKind.LACRADA }?.let { g.acceptContract(it) }
+                g.shipyard().firstOrNull { it.second != null && it.second!! < g.credits - 2_000 }?.let { g.buyUpgrade(it.first) }
+                val ready = world.crises.isNotEmpty() && g.contracts.isNotEmpty() && Upgrade.values().any { g.level(it) > 0 } && g.shipyard().isNotEmpty()
+                if (ready) return g
+                val dest = g.reachable().let { it[(g.day + seed.toInt()) % it.size] }
+                if (g.travel(dest) !is Outcome.Ok) return@repeat
+            }
+        }
+        error("nenhuma campanha de demonstração encontrada")
+    }
+
     /** As quatro telas das maquetes (docs/mercador) sobre um jogo real, uma linha do tempo só. */
     fun renderAll(outDir: File): List<File> {
         outDir.mkdirs()
@@ -134,6 +155,28 @@ object Preview {
 
         // 11: o hiperespaço, no meio do salto
         save("11-hiperespaco.png") { HyperspaceScreen(Jump("Zenqum", "Kote", 4, 3), .62f) }
+
+        // 12 a 16: o mundo vivo e a campanha, num jogo de verdade (crises no mapa, contratos, estaleiro, dívida, jornal)
+        val lg = livingDemo()
+        val lc = GameController(lg)
+        lc.selectTab(Tab.MAPA)
+        lc.selectSystem(lg.contracts.firstOrNull()?.let { k -> lg.world.region.systems.first { it.id == k.destination } } ?: lg.reachable().first())
+        save("12-mapa-vivo.png") { AppRoot(lc) }
+        lc.selectTab(Tab.ESTACAO); lc.selectStationTab(StationTab.CONTRATOS)
+        save("13-contratos.png") { AppRoot(lc) }
+        lc.selectStationTab(StationTab.ESTALEIRO)
+        save("14-estaleiro.png") { AppRoot(lc) }
+        lc.selectTab(Tab.DOSSIE)
+        save("15-divida.png") { AppRoot(lc) }
+        lg.credits = 60_000; lc.payCreditor()
+        save("16-epilogo.png") { AppRoot(lc) }
+
+        // 17 a 20: as outras animações, no meio
+        val f = lg.factions.factions
+        save("17-atracacao.png") { DockingScreen(Docking("Raorko", f[3], 42L), .5f) }
+        save("18-interceptacao.png") { InterceptionScreen(Interception("Kote", f[1], "6 t de carga comprometedora"), .62f) }
+        save("19-revolta.png") { RevoltScreen(Revolt("Orrahal", f[3], f[1]), .55f) }
+        save("20-estaleiro.png") { InstallScreen(Install(Upgrade.MOTOR, 1), .6f) }
         return files
     }
 }

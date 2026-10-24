@@ -38,7 +38,7 @@ internal object StoryContentLote3 {
                 Choice("Esperar na fila (2 dias)", "") { o -> o.days(2); o.rep(1); o.voice("Esperar também é um jeito de pagar."); "A fila anda. Você lê, dorme e anda com ela." },
             )),
 
-        Storylet("cla-em-luto", "Clã em luto", setOf(C), 9, { it.location.traits.ideology == Ideology.CLANICA },
+        Storylet("cla-em-luto", "Clã em luto", setOf(C), 9, { it.ideology == Ideology.CLANICA },
             "Uma procissão de {facção} bloqueia a avenida principal de {sistema}: um dos mais velhos do clã morreu. Há velas, tambores e uma fila de cabeças baixas.",
             listOf(
                 Choice("Acompanhar a procissão (1 dia)", "reputação e favor") { o ->
@@ -48,7 +48,7 @@ internal object StoryContentLote3 {
                 Choice("Furar a procissão", "reputação cai, a atenção sobe") { o -> o.rep(-5); o.heat(3); o.ledger("Atravessou a procissão fúnebre de {facção} em {sistema}."); "O tambor para. Todos olham para você." },
             )),
 
-        Storylet("edital-da-ordem", "Edital da ordem", setOf(C), 9, { it.location.traits.ideology == Ideology.AUTORITARIA },
+        Storylet("edital-da-ordem", "Edital da ordem", setOf(C), 9, { it.ideology == Ideology.AUTORITARIA },
             "Um edital novo cobre a parede do terminal de {sistema}: proíbe reuniões de mais de quatro pessoas depois do toque de recolher. Um guarda vigia quem lê.",
             listOf(
                 Choice("Assinar a ciência e seguir as regras", "reputação sobe") { o -> o.rep(2); o.meters(control = 1); o.voice("Regras são uma espécie de abrigo, até que deixam de ser."); "O guarda carimba seu nome e olha para a próxima pessoa." },
@@ -60,7 +60,7 @@ internal object StoryContentLote3 {
             )),
 
         Storylet("contrato-de-exclusividade", "Contrato de exclusividade", setOf(C), 8,
-            { it.location.traits.ideology == Ideology.MERCANTIL && it.credits >= 400 },
+            { it.ideology == Ideology.MERCANTIL && it.credits >= 400 },
             "A Guilda em {sistema} estende um contrato: 200 cr agora, em troca da promessa de não negociar com ninguém que {rival} aprove. A letra miúda ocupa três páginas.",
             listOf(
                 Choice("Assinar (+200 cr)", "reputação sobe aqui, cai com {rival}") { o ->

@@ -15,9 +15,10 @@ fun AppRoot(c: GameController) {
     val report = c.report
     val card = g.pendingStory
     when {
-        c.jump != null -> HyperspaceJump(c.jump!!, c::finishJump)
+        c.cinematic != null -> CinematicPlayer(c.cinematic!!, c::finishCinematic)
         c.showSlots -> SlotsScreen(c.slotList(), c.slotId, c.pendingDelete, c.notice, c::loadSlot, c::deleteSlot, c::newGame, c::closeSlots)
         report != null -> ReportScreen(report, c::dismissReport)
+        !g.busy && g.epilogue() != null -> EpilogueScreen(g.epilogue()!!, c::dismissEpilogue)
         g.pursuit != null -> PursuitScreen(g, c::respond)
         g.confrontation != null -> ConfrontationScreen(g, g.confrontation!!, InnerVoice.line(g), c::act)
         card != null -> StoryScreen(card, InnerVoice.line(g), c::choose)
@@ -28,9 +29,10 @@ fun AppRoot(c: GameController) {
             Tab.ESTACAO -> StationScreen(
                 g, c::selectTab,
                 StationUi(c.stationTab, c.selectedCommodity, c.quantity, c.notice, c.rumor,
-                    c::selectStationTab, c::selectCommodity, c::cycleQuantity, c::buy, c::sell, c::buyRumor),
+                    c::selectStationTab, c::selectCommodity, c::cycleQuantity, c::buy, c::sell, c::buyRumor,
+                    c::acceptContract, c::deliverContract, c::abandonContract, c::buyUpgrade),
             )
-            Tab.DOSSIE -> DossierScreen(g, c.notice, c::selectTab, c::refuel, c::takeLoan, c::haulFreight, c::repay, c::openSlots)
+            Tab.DOSSIE -> DossierScreen(g, c.notice, c::selectTab, c::refuel, c::takeLoan, c::haulFreight, c::repay, c::openSlots, c::payCreditor)
             Tab.LIVRO -> LedgerScreen(g, InnerVoice.line(g), c::selectTab)
         }
     }

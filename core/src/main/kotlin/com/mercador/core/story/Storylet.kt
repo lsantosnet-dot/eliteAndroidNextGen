@@ -43,7 +43,7 @@ class StoryCard(val storylet: Storylet, val text: String, val trigger: Trigger, 
 /** Efeitos que uma escolha pode ter, todos limitados para nunca quebrar invariantes do jogo. */
 class Ops(val g: Game, val rng: Rng) {
     val system = g.location
-    val faction: Faction = system.faction
+    val faction: Faction = g.faction
     val rival: Faction = g.factions.factions.filter { it.id != faction.id }.minBy { g.factions.relation(faction.id, it.id) }
 
     fun credits(n: Int) { g.credits = (g.credits + n).coerceAtLeast(0) }
@@ -76,7 +76,7 @@ class Ops(val g: Game, val rng: Rng) {
 
 object StoryEngine {
     /** Chance de haver uma história em cada chegada. */
-    const val CHANCE = 0.4
+    const val CHANCE = 0.6
     const val COOLDOWN_DAYS = 25
 
     fun eligible(g: Game, trigger: Trigger): List<Storylet> = StoryContent.all.filter { s ->
@@ -110,7 +110,7 @@ object StoryEngine {
     /** Lacunas preenchidas pelo mundo: o governador e o rival têm nome e são sempre os mesmos para o sistema. */
     fun fill(g: Game, template: String, seed: Long): String {
         val sys = g.location
-        val faction = sys.faction
+        val faction = g.faction
         val rival = g.factions.factions.filter { it.id != faction.id }.minBy { g.factions.relation(faction.id, it.id) }
         val governor = People.generate(Rng(derive(sys.seedKey(), 0x607)), faction, "governador").name
         return template
