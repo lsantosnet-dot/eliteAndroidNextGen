@@ -165,7 +165,7 @@ private fun SystemCard(game: Game, s: StarSystem, onTravel: () -> Unit, notice: 
             Spacer(Modifier.height(10.dp))
             if (notice != null) { T(notice, 11.5f, Noir.salmon, italic = true, modifier = Modifier.padding(bottom = 6.dp)) }
             val can = s !== game.location && cost <= game.fuel
-            if (can) PrimaryButton("Saltar para ${s.name}", Modifier.fillMaxWidth(), onTravel)
+            if (can) PrimaryButton("Decolar rumo a ${s.name}", Modifier.fillMaxWidth(), onTravel)
             else OutlineButton(if (s === game.location) "Você está aqui" else "Combustível insuficiente", Modifier.fillMaxWidth(), Noir.muted, onTravel)
         }
     }

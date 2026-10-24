@@ -58,7 +58,7 @@ class StationUi(
 
 /** Estação: mercado com consequências (maquete 2). */
 @Composable
-fun StationScreen(game: Game, onTab: (Tab) -> Unit = {}, ui: StationUi = StationUi()) {
+fun StationScreen(game: Game, onTab: (Tab) -> Unit = {}, onLaunch: () -> Unit = {}, ui: StationUi = StationUi()) {
     val s = game.location
     val ruler = game.faction
     val color = Noir.faction(ruler)
@@ -83,6 +83,11 @@ fun StationScreen(game: Game, onTab: (Tab) -> Unit = {}, ui: StationUi = Station
                 Spacer(Modifier.height(4.dp))
                 T("DIA ${game.day}", 11f, Noir.muted, Noir.mono)
             }
+            // decolar: o voo começa com a estação atrás e o planeta à frente
+            Box(
+                Modifier.align(Alignment.BottomEnd).padding(12.dp).clip(RoundedCornerShape(6.dp)).background(Noir.bg.copy(alpha = .7f))
+                    .border(1.dp, Noir.amber, RoundedCornerShape(6.dp)).clickable { onLaunch() }.padding(horizontal = 12.dp, vertical = 6.dp),
+            ) { T("DECOLAR ▸", 12f, Noir.amber, Noir.mono, weight = FontWeight.Bold, spacing = 1.5f) }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Noir.line))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {

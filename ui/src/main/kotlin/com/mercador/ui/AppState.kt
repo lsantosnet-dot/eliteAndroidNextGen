@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mercador.core.economy.Commodity
+import com.mercador.core.flight.FlightResult
+import com.mercador.core.flight.FlightSession
 import com.mercador.core.game.*
 import com.mercador.core.game.SaveSlots
 import com.mercador.core.universe.StarSystem
@@ -55,6 +57,9 @@ class GameController(
     private val queue = ArrayDeque<Cinematic>()
     /** O salto no hiperespaço, enquanto é ele que está tocando. */
     val jump: Jump? get() = cinematic as? Jump
+    /** Voo em andamento (entre decolar e atracar); null quando atracado. */
+    var flight by mutableStateOf<FlightSession?>(null)
+        private set
 
     private fun touch() {
         version++
@@ -68,7 +73,7 @@ class GameController(
     private fun resetUi() {
         tab = Tab.ESTACAO; stationTab = StationTab.MERCADO; selectedSystem = null; selectedCommodity = null
         quantity = 1; report = null; rumor = null; pendingDelete = null
-        queue.clear(); cinematic = null
+        queue.clear(); cinematic = null; flight = null
     }
 
     private fun swap(g: Game, id: Int?, msg: String) {
@@ -78,6 +83,7 @@ class GameController(
 
     private fun canSwitch(): Boolean {
         if (game.busy) { notice = "Resolva o que está acontecendo antes de trocar de jogo."; version++; return false }
+        if (flight != null) { notice = "Atraque antes de trocar de jogo."; version++; return false }
         return true
     }
 
@@ -221,6 +227,65 @@ class GameController(
                 touch()
             }
         }
+    }
+
+    /**
+     * Decola da estação para pilotar: o destino escolhido no mapa (se houver) vira o alvo do hiperespaço.
+     * O salto, os tiros e a atracação acontecem no voo; o resultado volta por [onFlight].
+     */
+    fun launch() {
+        if (game.busy) return fail(describe(Failure.PERSEGUICAO_PENDENTE))
+        if (flight != null) return
+        flight = FlightSession(game, selectedSystem).also { it.launch() }
+        notice = null
+        touch()
+    }
+
+    /** Escolhe o destino no mapa e decola rumo a ele. */
+    fun launchTo(s: StarSystem) {
+        game.jumpCheck(s)?.let { return fail(describe(it)) }
+        selectedSystem = s
+        launch()
+    }
+
+    /** Troca o destino do hiperespaço em pleno voo (o mapa de bordo). */
+    fun selectFlightTarget(s: StarSystem) {
+        flight?.selectTarget(s)
+        selectedSystem = s
+        version++
+    }
+
+    /** O voo terminou (atracou, morreu) ou saltou: animações, relatório e o estado da interface. */
+    fun onFlight(r: FlightResult) {
+        when (r) {
+            is FlightResult.Docked -> {
+                flight = null
+                play(listOf(Docking(r.system.name, game.faction, r.system.seedKey())))
+                selectedSystem = null; tab = Tab.ESTACAO; stationTab = StationTab.MERCADO
+                notice = "Atracou em ${r.system.name}."
+            }
+            is FlightResult.Jumped -> {
+                // Salto, revoltas no caminho e, se a patrulha esperava na chegada, a interceptação.
+                val seq = ArrayList<Cinematic>()
+                seq += Jump(r.from.name, r.to.name, r.ly, r.days)
+                for ((s, old, now) in r.revolts) seq += Revolt(s.name, old, now)
+                when (val o = r.outcome) {
+                    is Outcome.Pursued -> seq += Interception(r.to.name, o.pursuit.patrol, "${o.pursuit.evidenceTons} t de carga comprometedora")
+                    is Outcome.Confronting -> seq += Interception(r.to.name, o.scene.opponent.faction, "${o.scene.opponent.name} veio pessoalmente")
+                    else -> Unit
+                }
+                play(seq)
+                selectedSystem = null
+            }
+            is FlightResult.Misjumped -> play(listOf(Jump(r.from.name, "Witchspace", 0, 0)))
+            is FlightResult.Destroyed -> {
+                flight = null
+                queue.clear(); cinematic = null
+                report = Report("Nave destruída", r.text)
+                selectedSystem = null; tab = Tab.ESTACAO; stationTab = StationTab.MERCADO
+            }
+        }
+        touch()
     }
 
     fun respond(r: Response) {

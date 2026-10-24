@@ -11,7 +11,8 @@ class UiRenderTest {
         val files = Preview.renderAll(dir)
         assertEquals(listOf("01-mapa.png", "02-estacao.png", "05-perseguicao.png", "03-confronto.png", "04-livro.png", "06-historia.png", "07-relatorio.png", "08-dossie.png", "09-bar.png", "10-jogos.png", "11-hiperespaco.png",
             "12-mapa-vivo.png", "13-contratos.png", "14-estaleiro.png", "15-divida.png", "16-epilogo.png",
-            "17-atracacao.png", "18-interceptacao.png", "19-revolta.png", "20-estaleiro.png"), files.map { it.name })
+            "17-atracacao.png", "18-interceptacao.png", "19-revolta.png", "20-estaleiro.png",
+            "21-voo-decolagem.png", "22-voo-combate.png", "23-witchspace.png"), files.map { it.name })
         for (f in files) {
             val img = ImageIO.read(f)
             assertEquals(720, img.width); assertEquals(1480, img.height)

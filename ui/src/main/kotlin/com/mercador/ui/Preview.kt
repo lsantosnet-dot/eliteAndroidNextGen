@@ -177,6 +177,13 @@ object Preview {
         save("18-interceptacao.png") { InterceptionScreen(Interception("Kote", f[1], "6 t de carga comprometedora"), .62f) }
         save("19-revolta.png") { RevoltScreen(Revolt("Orrahal", f[3], f[1]), .55f) }
         save("20-estaleiro.png") { InstallScreen(Install(Upgrade.MOTOR, 1), .6f) }
+
+        // 21 a 23: o voo (o Elite dentro do Mercador)
+        val fw = World(Region.around(Universe(2024)))
+        val fg = Game(fw, fw.region.systems[0], credits = 5_000, stories = false)
+        save("21-voo-decolagem.png") { FlightScreen(FlightDemo.launch(fg), {}, {}, live = false) }
+        save("22-voo-combate.png") { FlightScreen(FlightDemo.combat(fg), {}, {}, live = false) }
+        save("23-witchspace.png") { FlightScreen(FlightDemo.witchspace(fg), {}, {}, live = false) }
         return files
     }
 }
