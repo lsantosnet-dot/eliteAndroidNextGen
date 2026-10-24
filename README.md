@@ -19,7 +19,7 @@ core/   Kotlin/JVM puro, testável sem Android SDK
   story/     Storylet/StoryEngine (eventos com condições e lacunas), StoryContent + StoryContentLote2..4 (72 storylets), InnerVoice (voz interior)
   economy/   Commodity (12 mercadorias), Laws (ideologia → contrabando) e Market (preço/estoque por sistema e dia)
 app/    App Android (Activity + ViewModel que guarda o jogo; reaproveita o código de ui/ sem as classes só de PC). Só entra no build com Android SDK
-ui/     Interface Compose (dossiê noir): tema, telas (Mapa com crises, contratos e lucro estimado, Estação com mercado/contratos/estaleiro/dossiê/bar, Epílogo, animação de hiperespaço no salto, Dossiê, Livro, Perseguição, Confronto, História, Relatório), GameController (estado e ações) e AppRoot (navegação); Preview renderiza PNGs sem janela
+ui/     Interface Compose (dossiê noir): tema, telas (Mapa com crises, contratos e lucro estimado, Estação com mercado/contratos/estaleiro/dossiê/bar, Epílogo, animações (Cinematics: atracação, interceptação, revolta, estaleiro), animação de hiperespaço no salto, Dossiê, Livro, Perseguição, Confronto, História, Relatório), GameController (estado e ações) e AppRoot (navegação); Preview renderiza PNGs sem janela
 docs/   Design e protótipo visual (docs/mercador)
 ```
 
@@ -40,6 +40,9 @@ livro de contas, e o jogo segue em modo livre.
 - **Mundo vivo**: fome, epidemia, bloqueio, guerra, festival e veios descobertos surgem e acabam, inflacionando o que
   falta (e o bar sabe da próxima antes). Entregar o que falta encerra a crise antes. Sistemas sob pressão (muito
   descontentamento e pouco controle) se revoltam: a cor no mapa e as leis mudam. Armas seguram um regime; livros o derrubam.
+- **Animações**: além do salto no hiperespaço, a atracação na estação (a Coriolis girando até alinhar a fenda),
+  a interceptação pela patrulha (radar, sirene e faróis), a revolta de um sistema no caminho (a cor velha racha e a
+  nova inunda) e a instalação de melhorias no estaleiro. Tocam em sequência e um toque pula.
 - **Mais histórias**: 60% das chegadas e saltos trazem uma, incluindo encontros sobre crises, revoltas, a carga
   lacrada e o agiota.
 
@@ -74,3 +77,5 @@ O `:ui` usa Compose Multiplatform (desktop/JVM) e baixa `androidx.*` do Google M
 ![Mapa](docs/ui/01-mapa.png) ![Estação](docs/ui/02-estacao.png) ![Confronto](docs/ui/03-confronto.png) ![Livro](docs/ui/04-livro.png)
 
 ![Mapa vivo](docs/ui/12-mapa-vivo.png) ![Contratos](docs/ui/13-contratos.png) ![Estaleiro](docs/ui/14-estaleiro.png) ![Dívida](docs/ui/15-divida.png) ![Epílogo](docs/ui/16-epilogo.png)
+
+![Hiperespaço](docs/ui/11-hiperespaco.png) ![Atracação](docs/ui/17-atracacao.png) ![Interceptação](docs/ui/18-interceptacao.png) ![Revolta](docs/ui/19-revolta.png) ![Instalação](docs/ui/20-estaleiro.png)

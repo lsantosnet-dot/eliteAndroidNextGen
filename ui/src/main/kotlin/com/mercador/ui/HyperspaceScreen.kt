@@ -22,30 +22,10 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** Dados do salto que a animação mostra (o jogo já mudou de lugar quando ela toca). */
-class Jump(val from: String, val to: String, val ly: Int, val days: Int)
+class Jump(val from: String, val to: String, val ly: Int, val days: Int) : Cinematic { override val durationMs get() = HYPERSPACE_MS }
 
 /** Duração fixa: é sempre a mesma animação. */
 const val HYPERSPACE_MS = 2800L
-
-/**
- * Toca a animação de hiperespaço e chama [onDone] ao fim (ou ao toque, para pular).
- * O progresso vem do relógio de quadros, então a duração não depende do aparelho.
- */
-@Composable
-fun HyperspaceJump(jump: Jump, onDone: () -> Unit) {
-    var progress by remember(jump) { mutableFloatStateOf(0f) }
-    LaunchedEffect(jump) {
-        var start = -1L
-        while (progress < 1f) {
-            withFrameNanos { now ->
-                if (start < 0) start = now
-                progress = ((now - start) / 1_000_000f / HYPERSPACE_MS).coerceIn(0f, 1f)
-            }
-        }
-        onDone()
-    }
-    Box(Modifier.fillMaxSize().clickable { onDone() }) { HyperspaceScreen(jump, progress) }
-}
 
 private const val STARS = 150
 private const val RINGS = 7

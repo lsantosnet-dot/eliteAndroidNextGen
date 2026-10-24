@@ -170,6 +170,13 @@ object Preview {
         save("15-divida.png") { AppRoot(lc) }
         lg.credits = 60_000; lc.payCreditor()
         save("16-epilogo.png") { AppRoot(lc) }
+
+        // 17 a 20: as outras animações, no meio
+        val f = lg.factions.factions
+        save("17-atracacao.png") { DockingScreen(Docking("Raorko", f[3], 42L), .5f) }
+        save("18-interceptacao.png") { InterceptionScreen(Interception("Kote", f[1], "6 t de carga comprometedora"), .62f) }
+        save("19-revolta.png") { RevoltScreen(Revolt("Orrahal", f[3], f[1]), .55f) }
+        save("20-estaleiro.png") { InstallScreen(Install(Upgrade.MOTOR, 1), .6f) }
         return files
     }
 }

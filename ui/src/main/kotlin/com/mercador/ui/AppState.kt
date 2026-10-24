@@ -48,9 +48,13 @@ class GameController(
     var notice by mutableStateOf<String?>(null)
     var rumor by mutableStateOf<String?>(null)
     var report by mutableStateOf<Report?>(null)
-    /** Animação de hiperespaço em curso; some sozinha ao terminar ([finishJump]) ou ao toque. */
-    var jump by mutableStateOf<Jump?>(null)
+    /** Animação em tela cheia tocando agora (salto, atracação, interceptação...); some ao terminar ou ao toque. */
+    var cinematic by mutableStateOf<Cinematic?>(null)
         private set
+    /** As que tocam depois desta, em ordem. */
+    private val queue = ArrayDeque<Cinematic>()
+    /** O salto no hiperespaço, enquanto é ele que está tocando. */
+    val jump: Jump? get() = cinematic as? Jump
 
     private fun touch() {
         version++
@@ -64,6 +68,7 @@ class GameController(
     private fun resetUi() {
         tab = Tab.ESTACAO; stationTab = StationTab.MERCADO; selectedSystem = null; selectedCommodity = null
         quantity = 1; report = null; rumor = null; pendingDelete = null
+        queue.clear(); cinematic = null
     }
 
     private fun swap(g: Game, id: Int?, msg: String) {
@@ -118,7 +123,18 @@ class GameController(
     fun selectCommodity(c: Commodity) { selectedCommodity = c; touch() }
     fun cycleQuantity() { quantity = when (quantity) { 1 -> 5; 5 -> 10; else -> 1 }; touch() }
     fun dismissReport() { report = null; touch() }
-    fun finishJump() { if (jump != null) { jump = null; version++ } }
+    /** Encerra a animação atual e passa para a próxima da fila (idempotente quando não há nenhuma). */
+    fun finishCinematic() {
+        if (cinematic == null) return
+        cinematic = queue.removeFirstOrNull()
+        version++
+    }
+    fun finishJump() = finishCinematic()
+
+    private fun play(list: List<Cinematic>) {
+        queue.clear(); queue.addAll(list)
+        cinematic = queue.removeFirstOrNull()
+    }
 
     fun buy() {
         val c = selectedCommodity ?: return fail("Escolha uma mercadoria.")
@@ -148,7 +164,13 @@ class GameController(
         if (o is Outcome.Fail) fail(describe(o.reason)) else { report = Report("Contrato cumprido", text ?: ""); touch() }
     }
 
-    fun buyUpgrade(u: Upgrade) = simple(game.buyUpgrade(u), "${u.label} instalado (nível ${game.level(u)}).")
+    fun buyUpgrade(u: Upgrade) {
+        val o = game.buyUpgrade(u)
+        if (o is Outcome.Fail) return fail(describe(o.reason))
+        play(listOf(Install(u, game.level(u))))
+        notice = "${u.label} instalado (nível ${game.level(u)})."
+        touch()
+    }
 
     fun payCreditor() {
         val o = game.payCreditor()
@@ -175,11 +197,25 @@ class GameController(
         val ly = game.fuelCost(to)
         val days = game.travelDays(to)
         val newsBefore = game.news.size
+        val rulers = game.world.region.systems.associateWith { game.world.controller(it) }
         when (val o = game.travel(to)) {
             is Outcome.Fail -> fail(describe(o.reason))
             else -> {
-                // Saltou: a animação sempre toca antes de a chegada (estação, perseguição ou história) aparecer.
-                jump = Jump(from.name, to.name, ly, days)
+                // Saltou: as animações sempre tocam antes de a chegada (estação, perseguição ou história) aparecer.
+                // Salto, revoltas que aconteceram no caminho e, por fim, atracação ou interceptação.
+                val seq = ArrayList<Cinematic>()
+                seq += Jump(from.name, to.name, ly, days)
+                for ((s, old) in rulers) {
+                    val now = game.world.controller(s)
+                    if (now.id != old.id) seq += Revolt(s.name, old, now)
+                }
+                val here = game.location
+                seq += when (o) {
+                    is Outcome.Pursued -> Interception(here.name, o.pursuit.patrol, "${o.pursuit.evidenceTons} t de carga comprometedora")
+                    is Outcome.Confronting -> Interception(here.name, o.scene.opponent.faction, "${o.scene.opponent.name} veio pessoalmente")
+                    else -> Docking(here.name, game.faction, here.seedKey())
+                }
+                play(seq)
                 selectedSystem = null; tab = Tab.ESTACAO; stationTab = StationTab.MERCADO
                 if (o is Outcome.Ok) notice = "Chegou a ${to.name}." + (game.news.drop(newsBefore).lastOrNull()?.let { " Jornal: ${it.text}" } ?: "")
                 touch()
