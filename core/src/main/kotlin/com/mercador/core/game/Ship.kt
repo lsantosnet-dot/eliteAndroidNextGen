@@ -13,9 +13,19 @@ enum class Upgrade(val label: String, val effect: String, val prices: List<Int>)
     TANQUE("Tanque extra", "+${FUEL_STEP} de combustível por nível: saltos mais longos", listOf(1_200, 3_500)),
     MOTOR("Motor de salto", "viagens ${MOTOR_STEP_PCT}% mais curtas por nível", listOf(2_500, 7_000)),
     COMPARTIMENTO("Compartimento oculto", "esconde $HIDDEN_STEP t de contrabando da revista por nível", listOf(2_000, 6_000)),
-    TRANSPONDER("Transponder falso", "patrulhas te abordam ${TRANSPONDER_CUT_PCT}% menos", listOf(6_000));
+    TRANSPONDER("Transponder falso", "patrulhas te abordam ${TRANSPONDER_CUT_PCT}% menos", listOf(6_000)),
+    LASER("Laser de combate", "o laser de pulso vira de feixe (nível 1) e militar (nível 2)", listOf(3_000, 8_000));
 
     val maxLevel: Int get() = prices.size
+
+    /** Laser do voo (byte LASER do Elite) com este nível de [LASER]: pulso, feixe ou militar. */
+    companion object {
+        fun laserFor(level: Int): Int = when (level) {
+            0 -> com.mercador.core.flight.PlayerShip.PULSE_LASER
+            1 -> com.mercador.core.flight.PlayerShip.BEAM_LASER
+            else -> com.mercador.core.flight.PlayerShip.MILITARY_LASER
+        }
+    }
 
     /** Preço do próximo nível, ou null se já está no máximo. */
     fun priceFor(level: Int): Int? = prices.getOrNull(level)

@@ -47,7 +47,7 @@ fun HyperspaceScreen(jump: Jump, p: Float) {
             val label = ((p - .15f) * 4f).coerceIn(0f, 1f) * (1f - ((p - .85f) * 7f).coerceIn(0f, 1f))
             T("${jump.from}  →  ${jump.to}", 16f, Noir.text.copy(alpha = label), Noir.mono, align = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
-            T("${jump.ly} LY · ${jump.days} dias", 11f, Noir.muted.copy(alpha = label), Noir.mono, align = TextAlign.Center)
+            T(if (jump.ly == 0) "O SALTO NÃO SE COMPLETA" else "${jump.ly} LY · ${jump.days} dias", 11f, (if (jump.ly == 0) Noir.red else Noir.muted).copy(alpha = label), Noir.mono, align = TextAlign.Center)
             Spacer(Modifier.height(18.dp))
         }
     }

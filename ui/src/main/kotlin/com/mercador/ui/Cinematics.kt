@@ -389,6 +389,12 @@ private fun DrawScope.drawInstall(u: Upgrade, p: Float) {
             drawCircle(partColor.copy(alpha = glow), 4f * k, tip)
             tip
         }
+        Upgrade.LASER -> {
+            // o canhão no nariz, com um feixe que acende
+            drawLine(partColor.copy(alpha = glow), pt(0f, -50f), pt(0f, -78f), 3f * density)
+            drawLine(partColor.copy(alpha = .5f * glow), pt(0f, -78f), pt(0f, -78f - 60f * glow), 1.6f * density)
+            pt(0f, -50f)
+        }
     }
     // varredura que desce pela nave
     val scan = window(p, .25f, .8f)

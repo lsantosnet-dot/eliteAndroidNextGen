@@ -22,12 +22,13 @@ fun AppRoot(c: GameController) {
         g.pursuit != null -> PursuitScreen(g, c::respond)
         g.confrontation != null -> ConfrontationScreen(g, g.confrontation!!, InnerVoice.line(g), c::act)
         card != null -> StoryScreen(card, InnerVoice.line(g), c::choose)
+        c.flight != null -> FlightScreen(c.flight!!, c::onFlight, c::selectFlightTarget)
         else -> when (c.tab) {
             Tab.MAPA -> MapScreen(
-                g, c.selectedSystem ?: g.location, c::selectSystem, c::selectTab, c::travel, c.notice,
+                g, c.selectedSystem ?: g.location, c::selectSystem, c::selectTab, { c.selectedSystem?.takeIf { it !== g.location }?.let(c::launchTo) }, c.notice,
             )
             Tab.ESTACAO -> StationScreen(
-                g, c::selectTab,
+                g, c::selectTab, c::launch,
                 StationUi(c.stationTab, c.selectedCommodity, c.quantity, c.notice, c.rumor,
                     c::selectStationTab, c::selectCommodity, c::cycleQuantity, c::buy, c::sell, c::buyRumor,
                     c::acceptContract, c::deliverContract, c::abandonContract, c::buyUpgrade),

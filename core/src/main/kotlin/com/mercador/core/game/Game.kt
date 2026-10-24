@@ -199,13 +199,14 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         return Outcome.Ok(credits)
     }
 
-    fun travel(to: StarSystem): Outcome {
-        if (busy) return Outcome.Fail(Failure.PERSEGUICAO_PENDENTE)
-        if (to === location || to !in world.region.systems) return Outcome.Fail(Failure.FORA_DE_ALCANCE)
-        val cost = fuelCost(to)
-        if (cost > fuelCapacity) return Outcome.Fail(Failure.FORA_DE_ALCANCE)
-        if (cost > fuel) return Outcome.Fail(Failure.SEM_COMBUSTIVEL)
-        fuel -= cost
+    /**
+     * Salta para [to]: gasta combustível, passa os dias da viagem e chega (patrulha, histórias).
+     * [prepaid] é o combustível já queimado num salto que falhou (witchspace) a caminho do mesmo destino.
+     */
+    fun travel(to: StarSystem, prepaid: Int = 0): Outcome {
+        val check = jumpCheck(to, prepaid)
+        if (check != null) return Outcome.Fail(check)
+        fuel -= (fuelCost(to) - prepaid).coerceAtLeast(0)
         val days = travelDays(to)
         elapse(days)
         location = to
@@ -216,6 +217,68 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         storySeen[card.storylet.id] = day
         pendingStory = card
         return Outcome.Story(card)
+    }
+
+    /** Por que o salto para [to] não pode acontecer agora, ou null se pode. */
+    fun jumpCheck(to: StarSystem, prepaid: Int = 0): Failure? {
+        if (busy) return Failure.PERSEGUICAO_PENDENTE
+        if (to === location || to !in world.region.systems) return Failure.FORA_DE_ALCANCE
+        val cost = fuelCost(to)
+        if (cost > fuelCapacity) return Failure.FORA_DE_ALCANCE
+        if (cost - prepaid > fuel) return Failure.SEM_COMBUSTIVEL
+        return null
+    }
+
+    /**
+     * O salto para [to] falhou no meio (witchspace): queima metade do combustível da viagem, que conta como já
+     * pago quando o jogador saltar de novo para o mesmo destino ([travel] com `prepaid`). Retorna o combustível queimado.
+     */
+    fun misjump(to: StarSystem): Int {
+        if (jumpCheck(to) != null) return 0
+        val burned = (fuelCost(to) + 1) / 2
+        fuel -= burned
+        note("O salto para ${to.name} falhou no meio do caminho: witchspace, e não estávamos sozinhos.")
+        return burned
+    }
+
+    /** Recompensa por uma nave abatida em voo (piratas e foragidos valem dinheiro). */
+    fun collectBounty(amount: Int) { if (amount > 0) credits += amount }
+
+    /** Um contêiner recolhido no espaço: 1 t de algo, se couber no porão. Retorna o que veio, ou null. */
+    fun scoopCanister(rng: Rng): Commodity? {
+        if (holdFree <= 0) return null
+        val c = Commodity.values()[rng.nextInt(Commodity.values().size)]
+        val own = ownTons(c)
+        avgCost[c] = ((avgCost[c] ?: 0).toLong() * own).div(own + 1).toInt()
+        cargo[c] = (cargo[c] ?: 0) + 1
+        return c
+    }
+
+    /** O jogador atirou em quem não devia (polícia, inocentes, a estação): a lei de quem manda aqui anota. */
+    fun aggression(heat: Int) { standing.addHeat(faction, heat) }
+
+    /** Status legal do voo (FIST do Elite, 0..255): ≥ 40 os caçadores de recompensa atacam. Vem da atenção da facção local. */
+    fun legalStatus(): Int = (standing.heat(faction) * 3 / 5 + if (standing.isRestricted(faction)) 20 else 0).coerceIn(0, 255)
+
+    /** Resumo de um voo, anotado no livro ao atracar. */
+    fun logFlight(kills: Int, bounty: Int) {
+        if (kills > 0) note("Em voo: $kills nave${if (kills > 1) "s" else ""} abatida${if (kills > 1) "s" else ""}" + if (bounty > 0) ", $bounty cr de recompensa." else ".")
+    }
+
+    /**
+     * A nave foi destruída em voo. A cápsula de fuga leva o jogador de volta à estação de onde ele está; a
+     * seguradora entrega outra nave igual (com as melhorias), cobra a franquia e a carga se perde
+     * (a carga lacrada quebra o contrato). Retorna o texto do desfecho.
+     */
+    fun shipDestroyed(): String {
+        val lost = cargo.values.sum()
+        cargo.clear(); avgCost.clear()
+        checkSealed()
+        val fee = minOf(credits, maxOf(INSURANCE_MIN, credits / 10))
+        credits -= fee
+        note("Nave destruída em combate. A cápsula de fuga voltou a ${location.name}; a seguradora cobrou $fee cr" + if (lost > 0) " e $lost t de carga se perderam." else ".")
+        return "A cápsula de fuga dispara um segundo antes da explosão e te deixa, tonto, no hangar de ${location.name}. " +
+            "A seguradora entrega outra nave igual e cobra a franquia: ${fee} cr." + if (lost > 0) " As $lost t de carga viraram destroços." else ""
     }
 
     /** Escolhe uma opção da storylet pendente; o efeito e o texto do desfecho vêm da própria storylet. */
@@ -932,6 +995,7 @@ class Game(val world: World, start: StarSystem, var credits: Int = START_CREDITS
         }
 
         const val START_CREDITS = 1000
+        const val INSURANCE_MIN = 150
         const val HOLD_CAPACITY = 20
         const val FUEL_CAPACITY = 20
         const val FUEL_PRICE = 10
